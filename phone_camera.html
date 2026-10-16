@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071923">
+  <title>Jarvis Phone Camera</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.45 system-ui, sans-serif; background: #071923; color: #e8f6fc; }
+    * { box-sizing: border-box; }
+    body { max-width: 760px; margin: 0 auto; padding: 20px 16px 36px; }
+    h1 { margin: 0 0 6px; color: #66e3ff; font-size: 1.5rem; }
+    p { color: #bdd1db; }
+    label { display: block; margin: 14px 0 6px; font-weight: 650; }
+    input, select, button { width: 100%; min-height: 46px; border: 1px solid #326074; border-radius: 10px; padding: 10px 12px; font: inherit; }
+    input, select { background: #102c3b; color: inherit; }
+    button { cursor: pointer; background: #087fa1; color: white; border: 0; font-weight: 700; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .secondary { margin-top: 10px; background: #183746; }
+    .card { margin-top: 16px; padding: 16px; border: 1px solid #244653; border-radius: 14px; background: #0b202b; }
+    video { display: block; width: 100%; max-height: 60vh; aspect-ratio: 4/3; object-fit: contain; border-radius: 10px; background: #02090d; }
+    #status { min-height: 1.5em; color: #9ce4f5; overflow-wrap: anywhere; }
+    #status[data-error="true"] { color: #ffb5aa; }
+    .note { font-size: .9rem; }
+    .small { margin-top: 12px; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <h1>Phone camera companion</h1>
+  <p>Streams video directly over your local Wi-Fi to the paired desktop. No cloud, audio, location, or app control.</p>
+  <section class="card">
+    <label for="pair-code">Desktop pairing code</label>
+    <input id="pair-code" inputmode="text" autocomplete="one-time-code" maxlength="8" autocapitalize="characters" placeholder="8-character code">
+    <label for="camera-choice">Camera</label>
+    <select id="camera-choice" aria-label="Select camera">
+      <option value="">Default camera</option>
+    </select>
+    <button id="connect" type="button">Allow camera and connect</button>
+    <button id="disconnect" class="secondary" type="button" hidden>Disconnect and stop camera</button>
+    <p id="status" role="status" aria-live="polite">Enter the code shown on your desktop.</p>
+  </section>
+  <section class="card">
+    <video id="preview" autoplay muted playsinline aria-label="Local camera preview"></video>
+    <p class="note">This preview stays on your phone. Video is sent only to the paired desktop on this Wi-Fi network.</p>
+  </section>
+  <p class="small">Keep this page open while streaming. Closing it, disconnecting, or revoking camera permission stops the camera.</p>
+  <script>
+    (() => {
+      "use strict";
+      const codeInput = document.querySelector("#pair-code");
+      const cameraChoice = document.querySelector("#camera-choice");
+      const connectButton = document.querySelector("#connect");
+      const disconnectButton = document.querySelector("#disconnect");
+      const status = document.querySelector("#status");
+      const preview = document.querySelector("#preview");
+      let localStream = null;
+      let socket = null;
+      let peer = null;
+      let token = null;
+      let closing = false;
+      const pendingIceCandidates = [];
+
+      function setStatus(message, error = false) {
+        status.textContent = message;
+        status.dataset.error = String(error);
+      }
+
+      function signal(type, data) {
+        if (!socket || socket.readyState !== WebSocket.OPEN || !token) return;
+        socket.send(JSON.stringify({ type, token, ...(data === undefined ? {} : { data }) }));
+      }
+
+      async function populateCameras() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const selected = cameraChoice.value;
+        cameraChoice.replaceChildren(new Option("Default camera", ""));
+        devices.filter((device) => device.kind === "videoinput").forEach((device, index) => {
+          cameraChoice.add(new Option(device.label || `Camera ${index + 1}`, device.deviceId));
+        });
+        if ([...cameraChoice.options].some((option) => option.value === selected)) cameraChoice.value = selected;
+      }
+
+      function stopLocalCamera() {
+        if (!localStream) return;
+        localStream.getTracks().forEach((track) => track.stop());
+        localStream = null;
+        preview.srcObject = null;
+      }
+
+      function cleanup(sendDisconnect = false) {
+        if (closing) return;
+        closing = true;
+        if (sendDisconnect) signal("disconnect");
+        if (peer) {
+          peer.ontrack = null;
+          peer.onicecandidate = null;
+          peer.close();
+          peer = null;
+        }
+        if (socket) {
+          const current = socket;
+          socket = null;
+          current.close();
+        }
+        token = null;
+        pendingIceCandidates.length = 0;
+        stopLocalCamera();
+        connectButton.hidden = false;
+        connectButton.disabled = false;
+        disconnectButton.hidden = true;
+        closing = false;
+      }
+
+      async function handleSignal(message) {
+        if (message.type === "paired") {
+          token = message.token;
+          setStatus("Paired securely. Waiting for desktop video connection…");
+          return;
+        }
+        if (message.type === "peer_left") {
+          cleanup(false);
+          setStatus("Desktop disconnected. Camera stopped.");
+          return;
+        }
+        if (message.type === "offer") {
+          if (!peer || !localStream) throw new Error("Camera or connection is unavailable.");
+          await peer.setRemoteDescription(message.data);
+          while (pendingIceCandidates.length) {
+            await peer.addIceCandidate(pendingIceCandidates.shift());
+          }
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          signal("answer", peer.localDescription);
+          setStatus("Connected. Streaming locally to the desktop.");
+        } else if (message.type === "ice" && peer && message.data) {
+          if (peer.remoteDescription) await peer.addIceCandidate(message.data);
+          else pendingIceCandidates.push(message.data);
+        }
+      }
+
+      connectButton.addEventListener("click", async () => {
+        if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+          setStatus("Camera needs a trusted HTTPS connection. Install and trust the local certificate first.", true);
+          return;
+        }
+        const code = codeInput.value.trim().toUpperCase();
+        if (!/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/.test(code)) {
+          setStatus("Enter the 8-character code shown on the desktop.", true);
+          return;
+        }
+        connectButton.disabled = true;
+        setStatus("Requesting camera permission…");
+        try {
+          const video = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } };
+          if (cameraChoice.value) video.deviceId = { exact: cameraChoice.value };
+          else video.facingMode = { ideal: "environment" };
+          localStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+          preview.srcObject = localStream;
+          await preview.play();
+          await populateCameras();
+          const secureHost = location.hostname;
+          socket = new WebSocket(`wss://${secureHost}:8444`);
+          socket.onopen = () => socket.send(JSON.stringify({ type: "join", code }));
+          socket.onmessage = async (event) => {
+            try {
+              await handleSignal(JSON.parse(event.data));
+            } catch (error) {
+              setStatus(error.message || "The video connection failed.", true);
+              cleanup(true);
+            }
+          };
+          socket.onerror = () => setStatus("Could not reach the desktop. Check Wi-Fi and the firewall.", true);
+          socket.onclose = () => {
+            if (closing || !localStream) return;
+            cleanup(false);
+            setStatus("Disconnected. Camera stopped.", true);
+          };
+          peer = new RTCPeerConnection({ iceServers: [] });
+          localStream.getVideoTracks().forEach((track) => peer.addTrack(track, localStream));
+          peer.onicecandidate = ({ candidate }) => {
+            if (candidate) signal("ice", candidate);
+          };
+          peer.onconnectionstatechange = () => {
+            if (peer?.connectionState === "connected") setStatus("Connected. Streaming locally to the desktop.");
+            if (peer?.connectionState === "failed" || peer?.connectionState === "disconnected") {
+              cleanup(true);
+              setStatus("Video connection ended. Camera stopped.", true);
+            }
+          };
+          localStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+            cleanup(true);
+            setStatus("Camera permission was revoked or the camera stopped.", true);
+          }, { once: true });
+          connectButton.hidden = true;
+          disconnectButton.hidden = false;
+          setStatus("Camera ready. Pairing with desktop…");
+        } catch (error) {
+          cleanup(true);
+          setStatus(error.message || "Could not start the camera.", true);
+        }
+      });
+
+      disconnectButton.addEventListener("click", () => {
+        cleanup(true);
+        setStatus("Disconnected. Camera stopped.");
+      });
+      window.addEventListener("pagehide", () => cleanup(true));
+      cameraChoice.addEventListener("focus", () => void populateCameras().catch(() => {}));
+      void populateCameras().catch(() => {});
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Jarvis WhatsApp Bridge",
+  "version": "1.0.0",
+  "description": "Connects the local Jarvis assistant to WhatsApp Web with an explicit spoken confirmation before sending.",
+  "permissions": [
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "whatsapp-content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

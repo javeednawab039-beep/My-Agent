@@ -1,0 +1,2854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Human Head — CSS Sculpt</title>
+<style>
+/* ===== PAGE / STUDIO BACKGROUND ===== */
+:root{
+  color-scheme: light;
+  --skin-hi:#e8bdaa; --skin:#A96F59; --skin-mid:#915a47; --skin-lo:#754536; --skin-dk:#583326;
+  --shade:rgba(40,40,48,.5);
+  --head-radius:48% 48% 44% 44% / 38% 38% 62% 62%;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  background:#041722;
+  overflow-x:hidden;overflow-y:auto;
+}
+body::before,body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;
+}
+body::before{
+  z-index:0;
+  background:
+    radial-gradient(ellipse at 50% 45%,rgba(0,91,120,.2),transparent 72%),
+    repeating-linear-gradient(0deg,rgba(0,10,18,.16) 0 1px,transparent 1px 4px),
+    #041722;
+}
+body::after{
+  z-index:1;
+  background:radial-gradient(230px circle at var(--pointer-x,50%) var(--pointer-y,50%),rgba(0,206,255,.25),rgba(0,153,210,.09) 46%,transparent 100%);
+}
+body > svg.matrix-background{
+  position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+}
+.studio{
+  position:relative;z-index:2;display:grid;
+  grid-template-columns:minmax(300px,24vw) minmax(430px,1fr) minmax(330px,26vw);
+  grid-template-areas:"camera character hands";
+  align-items:stretch;gap:clamp(12px,1.6vw,24px);
+  width:100%;min-height:100vh;padding:clamp(12px,1.5vw,24px);
+}
+.camera-panel,.hand-panel{
+  position:relative;z-index:3;width:100%;min-width:0;min-height:0;
+  padding:clamp(12px,1.2vw,18px);border:1px solid rgba(58,205,239,.55);border-radius:14px;
+  background:rgba(3,20,30,.88);box-shadow:0 8px 28px rgba(0,0,0,.38);
+  color:#e6faff;font:14px/1.45 system-ui,sans-serif;backdrop-filter:blur(8px);
+}
+.camera-panel{grid-area:camera;align-self:start;max-height:calc(100vh - 36px);overflow:auto}
+.hand-panel{grid-area:hands;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 36px);overflow:auto}
+.tracker-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tracker-tab{border:1px solid #22778a;border-radius:7px;padding:8px;background:#061922;color:#b9deeb;font:650 12px system-ui,sans-serif;cursor:pointer}
+.tracker-tab[aria-selected="true"]{border-color:#22caec;background:#074355;color:#fff;box-shadow:0 0 12px rgba(34,202,236,.22)}
+.tracker-tab:focus-visible{outline:2px solid #8aeaff;outline-offset:2px}
+.tracker-view[hidden]{display:none}
+.tracker-view{display:flex;flex:1 1 auto;flex-direction:column;gap:10px;min-height:0}
+.tracker-view-human .person-stage{flex:1 1 330px;min-height:260px}
+.tracker-view-human .person-status-panel{flex:0 0 130px;min-height:110px}
+.tracker-view-hand .hand-stage{flex:1 1 250px;min-height:200px}
+.tracker-view-hand .motion-section{flex:0 0 190px;min-height:160px}
+.camera-panel.person-detected{border-color:rgba(255,62,75,.9);box-shadow:0 0 22px rgba(255,39,57,.42),0 8px 28px rgba(0,0,0,.38)}
+.person-alert{display:block;margin-top:8px;padding:7px 9px;border:1px solid rgba(101,164,174,.35);border-radius:6px;background:rgba(0,16,23,.68);color:#a8cbd2;font-size:12px;font-weight:700;letter-spacing:.04em}
+.person-alert[data-detected="true"]{border-color:#ff4654;background:rgba(93,8,19,.55);color:#ffd5d9;animation:person-alert-pulse 1.1s ease-in-out infinite alternate}
+@keyframes person-alert-pulse{to{box-shadow:0 0 15px rgba(255,55,69,.42)}}
+.panel-title{margin-bottom:10px;color:#9cecff;font-size:15px;font-weight:700;letter-spacing:.04em}
+.video-stage{position:relative;width:100%;overflow:hidden;border:1px solid rgba(57,205,239,.35);border-radius:9px;background:#02090d}
+.video-stage video,.video-stage canvas{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.video-stage video{transform:scaleX(-1)}
+.video-stage canvas{position:absolute;inset:0;height:100%;pointer-events:none;transform:scaleX(-1)}
+.camera-tip{display:block;margin-top:8px;color:#9dbec9;font-size:12px}
+.hand-stage{position:relative;flex:0 0 145px;min-height:120px;overflow:hidden;border:1px solid rgba(0,255,145,.35);border-radius:10px;background:#020605}
+.hand-stage canvas,.motion-stage canvas{display:block;width:100%;height:100%}
+.hand-stage canvas{position:absolute;inset:0}
+.hand-stage #hand-cursor{pointer-events:none}
+.person-stage{position:relative;flex:0 0 160px;min-height:135px;overflow:hidden;border:1px solid rgba(255,60,73,.45);border-radius:10px;background:#020405}
+.person-stage canvas{display:block;width:100%;height:100%}
+.person-stage-status{position:absolute;right:8px;bottom:7px;left:8px;color:#ff9da5;font-size:11px;text-shadow:0 1px 4px #000}
+.board-controls{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.board-hint{color:#9dbec9;font-size:12px}
+.board-controls button{
+  border:1px solid #19bde4;border-radius:6px;padding:6px 10px;
+  background:#06394d;color:#fff;font:600 12px system-ui,sans-serif;cursor:pointer;
+}
+.board-controls button:hover{background:#07536c}
+.board-controls button:focus-visible{outline:2px solid #8aeaff;outline-offset:2px}
+.alarm-toggle{
+  border:1px solid #b34b54;border-radius:6px;padding:6px 10px;
+  background:#351118;color:#ffe8ea;font:600 12px system-ui,sans-serif;cursor:pointer;
+}
+.alarm-toggle[aria-pressed="true"]{border-color:#39d88a;background:#06351f;color:#d4ffe5}
+.alarm-toggle:focus-visible{outline:2px solid #ffadb4;outline-offset:2px}
+.hand-state{color:#afffd4;font-size:13px}
+.motion-section{flex:0 0 150px;min-height:130px;padding:10px;border:1px solid rgba(58,205,239,.35);border-radius:10px;background:#020a0f}
+.person-status-panel{flex:0 0 110px;min-height:95px;padding:10px;border:1px solid rgba(255,60,73,.28);border-radius:10px;background:#09080b;color:#d6e2e5}
+.person-status-panel h2{margin-bottom:6px;color:#ff8f99;font-size:13px;letter-spacing:.04em}
+.motion-title{margin-bottom:8px;color:#9cecff;font-size:13px;font-weight:650}
+.motion-stage{height:calc(100% - 24px);min-height:100px}
+.hand-status{min-height:38px;color:#b9deeb;font-size:12px}
+.hand-status[data-error="true"]{color:#ffb8ac}
+.camera-panel video{border-radius:0}
+@media(min-width:851px){.studio{overflow:clip}}
+.camera-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px}
+.camera-controls button{
+  border:1px solid #19bde4;border-radius:6px;padding:6px 10px;
+  background:#06394d;color:#fff;font:600 12px system-ui,sans-serif;cursor:pointer;
+}
+.camera-controls button:hover{background:#07536c}
+.camera-controls button:focus-visible{outline:2px solid #8aeaff;outline-offset:2px}
+.camera-status{flex:1 1 120px;min-width:0;color:#b9deeb}
+.camera-status[data-error="true"]{color:#ffb8ac}
+.phone-companion-controls{display:grid;gap:7px;margin-top:9px;padding:10px;border:1px solid rgba(57,205,239,.28);border-radius:8px;background:rgba(3,25,37,.78)}
+.phone-companion-controls button{justify-self:start;border:1px solid #19bde4;border-radius:6px;padding:7px 10px;background:#06394d;color:#fff;font:600 12px system-ui,sans-serif;cursor:pointer}
+.phone-companion-controls button:disabled{opacity:.55;cursor:wait}
+.phone-pair-details{display:grid;gap:5px;overflow-wrap:anywhere;color:#b9deeb;font-size:12px}
+.phone-pair-details[hidden]{display:none}
+.phone-pair-code{font-size:20px;letter-spacing:.18em;color:#77edff}
+.phone-pair-details a{color:#77edff}
+.voice-controls{display:flex;align-items:center;gap:8px;margin-top:8px}
+.voice-status{min-width:0;color:#b9deeb}
+.voice-status[data-error="true"]{color:#ffb8ac}
+.voice-language{max-width:100%;border:1px solid #168eaa;border-radius:5px;padding:5px;background:#062b3a;color:#e6faff;font:12px system-ui,sans-serif}
+.whatsapp-controls{display:flex;align-items:center;gap:8px;margin-top:8px}
+.whatsapp-controls button{border:1px solid #19bde4;border-radius:6px;padding:6px 10px;background:#06394d;color:#fff;font:600 12px system-ui,sans-serif;cursor:pointer}
+.whatsapp-controls button:hover{background:#07536c}
+.whatsapp-status{min-width:0;color:#b9deeb}
+.whatsapp-status[data-error="true"]{color:#ffb8ac}
+.delivery-contacts{margin-top:10px;border:1px solid rgba(58,205,239,.3);border-radius:9px;background:rgba(2,10,15,.55)}
+.delivery-contacts summary{padding:9px;color:#9cecff;font-size:13px;font-weight:700;cursor:pointer}
+.delivery-contact-content{display:grid;gap:8px;padding:0 9px 10px}
+.delivery-contact-note,.delivery-contact-empty{color:#9dbec9;font-size:11px}
+.delivery-contact-form{display:grid;gap:7px}
+.delivery-contact-form label{display:grid;gap:3px;color:#b9deeb;font-size:11px}
+.delivery-contact-form input{
+  width:100%;min-width:0;border:1px solid #168eaa;border-radius:5px;padding:7px;
+  background:#061922;color:#e6faff;font:13px system-ui,sans-serif
+}
+.delivery-contact-form input:focus-visible{outline:2px solid #8aeaff;outline-offset:1px}
+.delivery-region{padding:7px;border:1px solid rgba(58,205,239,.2);border-radius:5px;background:#061922;color:#d6f5ff;font-size:12px}
+.delivery-contact-save,.delivery-contact-delete{
+  border:1px solid #19bde4;border-radius:6px;padding:7px 10px;
+  background:#06394d;color:#fff;font:600 12px system-ui,sans-serif;cursor:pointer
+}
+.delivery-contact-save:hover,.delivery-contact-delete:hover{background:#07536c}
+.delivery-contact-status{min-height:18px;color:#b9deeb;font-size:11px}
+.delivery-contact-status[data-error="true"]{color:#ffb8ac}
+.delivery-contact-list{display:grid;gap:6px;max-height:180px;overflow:auto;list-style:none}
+.delivery-contact-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;align-items:start;padding:7px;border:1px solid rgba(58,205,239,.2);border-radius:6px;background:rgba(3,20,30,.72)}
+.delivery-contact-details{min-width:0;overflow-wrap:anywhere;color:#c8e6ef;font-size:11px}
+.delivery-contact-details strong,.delivery-contact-details span{display:block}
+.delivery-contact-details strong{color:#e6faff;font-size:12px}
+.delivery-contact-delete{border-color:#8d4650;padding:5px 7px;background:#351118;font-size:11px}
+.delivery-contact-delete:hover{background:#571c27}
+.voice-note{display:block;margin-top:7px;color:#8caebb;font-size:12px}
+.voice-note a{color:#8aeaff}
+.command-guide{margin-top:8px;color:#c8e6ef}
+.command-guide summary{cursor:pointer}
+.command-guide ol{max-height:34vh;overflow:auto;padding:6px 0 0 24px;color:#b9deeb}
+.command-guide li{padding:2px 0}
+@media(max-width:1100px){
+  .studio{grid-template-columns:minmax(230px,30vw) minmax(340px,1fr) minmax(260px,30vw)}
+  .character{max-width:620px}
+}
+@media(max-width:850px){
+  .studio{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-areas:"character character" "camera hands";
+    align-items:start;
+  }
+  .character{width:min(100%,620px);justify-self:center}
+  .camera-panel{max-height:none}
+  .hand-stage{flex-basis:260px}
+}
+@media(max-width:560px){
+  .studio{grid-template-columns:minmax(0,1fr);grid-template-areas:"camera" "character" "hands";padding:10px;gap:12px}
+  .camera-panel,.hand-panel{padding:12px}
+  .character{grid-area:character}
+  .hand-stage{flex-basis:260px}
+  .camera-controls,.voice-controls,.whatsapp-controls{align-items:flex-start;flex-direction:column;gap:4px;margin-top:6px}
+}
+
+/* ===== CHARACTER WRAPPER ===== */
+.character{grid-area:character;position:relative;z-index:2;display:flex;align-items:flex-end;justify-content:center;align-self:end;width:100%;max-width:760px;max-height:calc(100vh - 32px);justify-self:center;padding:0}
+
+/* ===== HEAD CONTAINER (cqw units scale all blurs/shadows) ===== */
+.head-container{
+  position:relative;width:100%;aspect-ratio:4/5;max-height:calc(100vh - 40px);margin:0 auto;
+  container-type:inline-size;
+}
+.head-container > *{position:absolute}
+.bust-turn{
+  inset:0;z-index:1;transform-style:preserve-3d;
+  transform:perspective(950px) rotateY(-8deg) rotateX(3deg);
+}
+.front-view,.rear-view{position:absolute;inset:0;transform-style:preserve-3d}
+.front-view{
+  z-index:1;
+  opacity:calc(1 - var(--rear-opacity,0));
+}
+.rear-view{
+  display:none;
+}
+.front-view > *{position:absolute}
+.head-turn{
+  position:absolute;inset:0;z-index:11;transform-style:preserve-3d;
+  transform:rotateX(calc(3deg - var(--look-y,0) * 4deg));
+  transform-origin:50% 58%;
+}
+.head-turn > *{position:absolute}
+
+/* ===== SHOULDERS & UPPER TORSO ===== */
+.shoulders{
+  left:-2%;bottom:0;width:104%;height:27%;z-index:0;
+  border-radius:46% 46% 0 0 / 75% 75% 0 0;
+  background:
+   radial-gradient(ellipse 30% 45% at 50% 0%,rgba(255,255,255,.08),transparent 100%),
+   linear-gradient(90deg,#09090b 0%,#211e20 22%,#111012 50%,#211e20 78%,#09090b 100%);
+ box-shadow:inset 0 1cqw 2cqw rgba(255,255,255,.08);
+}
+.suit-shirt{
+ left:29%;top:72.5%;width:42%;height:27.5%;z-index:3;
+ background:linear-gradient(90deg,#d9d8d6,#fff 24% 76%,#d9d8d6);
+ clip-path:polygon(0 0,100% 0,90% 30%,70% 100%,30% 100%,10% 30%);
+}
+.waistcoat{
+ left:31%;top:72.5%;width:38%;height:27.5%;z-index:4;
+ background:
+  linear-gradient(90deg,rgba(4,31,18,.7),transparent 20% 80%,rgba(4,31,18,.65)),
+  linear-gradient(100deg,#07512c,#159447 48%,#087039);
+ clip-path:polygon(0 0,100% 0,79% 18%,70% 100%,30% 100%,21% 18%);
+ filter:drop-shadow(0 .35cqw .5cqw rgba(0,0,0,.4));
+}
+.waistcoat::before{
+ content:"";position:absolute;left:49%;top:18%;width:2%;height:78%;
+ background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(194,255,207,.3),rgba(0,0,0,.2));
+}
+.waistcoat::after{
+ content:"";position:absolute;left:54%;top:47%;width:1.4cqw;height:1.4cqw;
+ border-radius:50%;
+ background:radial-gradient(circle at 35% 30%,#a4f2b1,#075b2d 68%);
+ box-shadow:0 3.4cqw 0 -.05cqw #0a652f,0 6.8cqw 0 -.05cqw #0a652f;
+}
+.suit-lapel{
+ top:72.5%;width:32%;height:27.5%;z-index:4;
+ background:linear-gradient(135deg,#45494a,#17191a 52%,#303334);
+ filter:drop-shadow(0 .2cqw .25cqw rgba(0,0,0,.28));
+}
+.suit-lapel.left{
+ left:6%;clip-path:polygon(100% 0,77% 25%,100% 39%,58% 100%,0 35%,46% 24%);
+}
+.suit-lapel.right{
+ right:6%;clip-path:polygon(0 0,23% 25%,0 39%,42% 100%,100% 35%,54% 24%);
+}
+.shirt-collar{
+ top:72%;width:15%;height:9%;z-index:7;
+ background:linear-gradient(135deg,#fff,#e5e3e2);
+ filter:drop-shadow(0 .35cqw .45cqw rgba(0,0,0,.25));
+}
+.shirt-collar.left{
+ left:35%;clip-path:polygon(0 0,100% 16%,83% 100%,58% 91%,35% 64%);
+}
+.shirt-collar.right{
+ right:35%;clip-path:polygon(100% 0,0 16%,17% 100%,42% 91%,65% 64%);
+}
+.necktie{
+ left:44%;top:74%;width:12%;height:28%;z-index:8;
+ background:repeating-linear-gradient(115deg,#07582e 0 18%,#39c65d 19% 27%,#0a7339 28% 52%,#b0f0b5 53% 57%,#08703a 58% 82%);
+ clip-path:polygon(18% 0,82% 0,68% 18%,100% 92%,50% 100%,0 92%,32% 18%);
+ filter:drop-shadow(0 .25cqw .35cqw rgba(0,0,0,.4));
+}
+.necktie::before{
+ content:"";position:absolute;left:22%;top:0;width:56%;height:22%;
+ background:linear-gradient(90deg,#07532d,#38bd58 48%,#07532d);
+ clip-path:polygon(0 0,100% 0,82% 72%,50% 100%,18% 72%);
+}
+.glasses{
+ left:24%;top:33.3%;width:52%;height:9.5%;z-index:9;
+ overflow:visible;pointer-events:none;
+}
+/* ===== NECK ===== */
+.neck{
+  left:35%;top:60%;width:30%;height:25%;z-index:1;
+  border-radius:8% 8% 20% 20% / 4% 4% 10% 10%;
+  background:linear-gradient(90deg,var(--skin-lo) 0%,var(--skin-mid) 22%,var(--skin) 45%,var(--skin) 55%,var(--skin-mid) 78%,var(--skin-lo) 100%);
+  -webkit-mask-image:linear-gradient(#000 78%,transparent 100%);
+          mask-image:linear-gradient(#000 78%,transparent 100%);
+}
+.neck::before{ /* jaw shadow cast on throat */
+  content:"";position:absolute;inset:0 0 auto 0;height:42%;
+  background:linear-gradient(rgba(58,34,27,.65),rgba(58,34,27,.2) 60%,transparent);
+}
+
+/* ===== NECK MUSCLES (sternocleidomastoid) ===== */
+.neck-muscle{
+  top:68%;width:5.5%;height:21%;z-index:2;border-radius:50%;
+  filter:blur(.5cqw);
+}
+.neck-muscle.left{
+  left:38.5%;transform:rotate(-17deg);
+  background:linear-gradient(90deg,rgba(88,51,38,.4),rgba(255,255,255,.28) 55%,rgba(88,51,38,.35));
+}
+.neck-muscle.right{
+
+  left:56%;transform:rotate(17deg);
+  background:linear-gradient(90deg,rgba(88,51,38,.35),rgba(255,255,255,.28) 45%,rgba(88,51,38,.4));
+}
+/* ===== EARS (outer ear shapes) ===== */
+.ear{
+  top:35%;width:6.3%;height:15%;z-index:1;
+  border-radius:55% 35% 45% 60% / 38% 38% 62% 62%;
+  background:linear-gradient(90deg,var(--skin-mid),var(--skin-hi) 45%,var(--skin));
+  box-shadow:inset .3cqw .3cqw .8cqw rgba(255,255,255,.4),inset -.2cqw -.4cqw .8cqw rgba(40,40,48,.5),0 .4cqw 1.2cqw rgba(0,0,0,.35);
+}
+.ear.left{left:19.4%}
+.ear.right{left:74.3%;transform:scaleX(-1)}
+.ear::before{ /* helix groove + concha */
+  content:"";position:absolute;left:14%;top:10%;width:62%;height:76%;
+  border-radius:50% 40% 45% 55% / 35% 35% 65% 65%;
+  background:radial-gradient(ellipse at 60% 45%,var(--skin-dk) 0%,var(--skin-lo) 55%,var(--skin-mid) 100%);
+  box-shadow:inset .4cqw .4cqw .9cqw rgba(30,30,38,.6);
+}
+.ear::after{ /* antihelix + lobe highlight */
+  content:"";position:absolute;left:34%;top:26%;width:30%;height:34%;
+  border-radius:50%;
+  background:radial-gradient(ellipse at 40% 40%,rgba(255,255,255,.55),transparent 80%);
+  filter:blur(.3cqw);
+}
+
+/* ===== MAIN HEAD / FACE SURFACE ===== */
+.head{
+  left:24%;top:4%;width:52%;height:66%;z-index:2;
+  border-radius:var(--head-radius);
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 26%, var(--skin-hi) 0%, transparent 100%),
+    radial-gradient(ellipse at 50% 42%, var(--skin) 0%, var(--skin-hi) 55%, var(--skin-mid) 85%, var(--skin-lo) 100%);
+  box-shadow:inset 0 -2cqw 4cqw rgba(70,40,32,.28);
+}
+
+/* ===== LAYERED ASH-BLOND HAIR ===== */
+.hair-art{
+  left:19%;top:1%;width:62%;height:34%;z-index:11;
+  overflow:visible;
+  filter:drop-shadow(0 .55cqw .45cqw rgba(48,35,28,.28));
+}
+
+/* ===== FOREHEAD & UPPER FACE ===== */
+.forehead{
+  left:29%;top:6%;width:42%;height:24%;z-index:3;
+  background:
+    radial-gradient(ellipse 50% 45% at 45% 45%, rgba(255,255,255,.65), transparent 100%),
+    linear-gradient(transparent 70%, rgba(80,45,35,.12));
+}
+
+/* ===== TEMPLES ===== */
+.temple{
+  top:17%;width:8%;height:19%;z-index:3;
+  background:radial-gradient(ellipse at 45% 50%, rgba(75,43,34,.35), transparent 72%);
+  filter:blur(.5cqw);
+}
+.temple.left{left:25%}
+.temple.right{left:67%}
+
+/* ===== JAW (lower face; masked to the head silhouette) ===== */
+.jaw{
+  left:24%;top:4%;width:52%;height:66%;z-index:3;
+  border-radius:var(--head-radius);
+  background:
+    linear-gradient(90deg,rgba(55,32,26,.4) 0%,transparent 18%,transparent 82%,rgba(55,32,26,.4) 100%),
+    linear-gradient(transparent 70%,rgba(70,40,32,.3) 100%);
+  -webkit-mask-image:linear-gradient(transparent 42%,#000 78%);
+          mask-image:linear-gradient(transparent 42%,#000 78%);
+}
+
+/* ===== CHEEKBONES ===== */
+.cheek{
+  top:41%;width:15%;height:13%;z-index:3;
+  background:
+    radial-gradient(ellipse 55% 40% at 50% 30%, rgba(255,255,255,.5), transparent 100%),
+    radial-gradient(ellipse 60% 50% at 50% 95%, rgba(75,43,34,.22), transparent 100%);
+  filter:blur(.4cqw);
+}
+.cheek.left{left:29%}
+.cheek.right{left:56%}
+
+/* ===== EYEBROWS ===== */
+.eyebrow{
+  top:30.7%;width:15%;height:3.8%;z-index:5;
+  border-radius:50% 50% 35% 35% / 90% 90% 45% 45%;
+  background:linear-gradient(180deg,transparent 20%,rgba(12,9,8,.96) 56%,rgba(28,19,16,.72) 76%,transparent 96%);
+  filter:blur(.18cqw);
+}
+.eyebrow.left{left:32.4%;transform:rotate(3deg)}
+.eyebrow.right{left:52.6%;transform:rotate(-3deg)}
+
+/* ===== EYE SOCKETS (shadow) ===== */
+.eye-socket{
+  top:32.8%;width:16%;height:10%;z-index:4;
+  background:radial-gradient(ellipse at 50% 52%,rgba(71,39,30,.42),rgba(100,58,44,.23) 48%,transparent 78%);
+  filter:blur(.65cqw);
+}
+.eye-socket.left{left:32.2%}
+.eye-socket.right{left:51.8%}
+
+/* ===== EYEBALLS ===== */
+.eye{
+  top:35.5%;width:10.2%;height:4.7%;z-index:5;overflow:hidden;
+  border-radius:50% / 62%;
+  background:radial-gradient(ellipse at 50% 44%,#fff 0%,#fffaf4 70%,#d9c8bb 100%);
+  box-shadow:inset 0 .25cqw .45cqw rgba(83,49,37,.2),0 .15cqw .35cqw rgba(55,31,24,.18);
+}
+.eye.left{left:35.3%}
+.eye.right{left:54.5%}
+.eye::before{
+  content:"";position:absolute;left:31%;top:17%;width:38%;height:66%;
+  border-radius:50%;
+  background:
+    repeating-conic-gradient(from 8deg at 50% 50%,rgba(48,22,10,.35) 0deg 2deg,transparent 2deg 7deg),
+    radial-gradient(circle at 50% 50%,#bd783c 0%,#98501f 52%,#603117 78%,#351b10 100%);
+  box-shadow:0 0 .35cqw rgba(47,23,13,.45);
+}
+.eye::after{
+  content:"";position:absolute;left:42%;top:35%;width:16%;height:30%;
+  border-radius:50%;
+  background:radial-gradient(circle at 34% 28%,#fff 0 13%,transparent 17%),radial-gradient(circle,#100a07 0 70%,#351b10 100%);
+}
+
+/* ===== EYELIDS, CREASES, AND LASHES ===== */
+.upper-eyelid,.lower-eyelid,.eyelid-crease,.upper-eyelashes,.lower-eyelashes{
+  pointer-events:none;
+}
+.upper-eyelid,.lower-eyelid,.eyelid-crease{
+  width:11.4%;border-radius:50%;
+}
+.upper-eyelid{
+  top:34.9%;height:1.6%;z-index:7;
+  border-bottom:.38cqw solid rgba(80,43,31,.72);
+  box-shadow:0 .35cqw .45cqw rgba(78,44,33,.28);
+}
+.upper-eyelid::after{
+  content:"";position:absolute;left:-.3cqw;top:.6cqw;width:calc(100% + .6cqw);height:5.9cqw;
+  transform:scaleY(0);transform-origin:top;border-radius:8% 8% 48% 48% / 8% 8% 28% 28%;
+  background:linear-gradient(180deg,#a96f59 0%,#bd8872 78%,#754536 100%);
+  box-shadow:0 .2cqw .35cqw rgba(47,26,19,.38);
+}
+.head-turn.is-blinking .upper-eyelid::after{animation:eye-blink .16s ease-in-out}
+@keyframes eye-blink{
+  0%,100%{transform:scaleY(0)}
+  18%,78%{transform:scaleY(1)}
+}
+.lower-eyelid{
+  top:39.8%;height:1.4%;z-index:7;
+  border-top:.24cqw solid rgba(143,87,65,.58);
+  box-shadow:0 -.22cqw .35cqw rgba(255,226,209,.32);
+}
+.eyelid-crease{
+  top:33.5%;height:2.8%;z-index:6;
+  border-bottom:.24cqw solid rgba(105,61,45,.5);
+  filter:blur(.12cqw);
+}
+.upper-eyelashes,.lower-eyelashes{
+  width:10.7%;height:.9%;z-index:8;
+  background:repeating-linear-gradient(105deg,transparent 0 5%,rgba(42,22,16,.95) 5.4% 6.6%,transparent 7% 10%);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8% 92%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 8% 92%,transparent);
+}
+.upper-eyelashes{
+  top:35.25%;
+  border-top:.25cqw solid rgba(48,25,18,.88);
+  border-radius:50% 50% 0 0;
+}
+.lower-eyelashes{
+  top:40.1%;height:.55%;
+  transform:scaleY(-1);
+  opacity:.7;
+}
+.upper-eyelid.left,.lower-eyelid.left,.eyelid-crease.left{left:34.7%}
+.upper-eyelid.right,.lower-eyelid.right,.eyelid-crease.right{left:54.1%}
+.upper-eyelashes.left,.lower-eyelashes.left{left:35.1%}
+.upper-eyelashes.right,.lower-eyelashes.right{left:54.5%}
+
+/* ===== NOSE (bridge, tip, nostrils, side contours) ===== */
+.nose{left:45%;top:35.5%;width:10%;height:16%;z-index:6}
+.nose::before{ /* bridge + body with shaded sides */
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(75,43,34,.3) 24%,rgba(255,255,255,.5) 44% 56%,rgba(75,43,34,.3) 76%,transparent 100%);
+  clip-path:polygon(41% 0,59% 0,66% 50%,86% 70%,100% 84%,88% 98%,12% 98%,0 84%,14% 70%,34% 50%);
+  filter:blur(.35cqw);
+}
+.nose::after{ /* nostrils, tip highlight, under-nose shadow */
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 15% 7% at 31% 87%, rgba(45,24,19,.8), transparent 100%),
+    radial-gradient(ellipse 15% 7% at 69% 87%, rgba(45,24,19,.8), transparent 100%),
+    radial-gradient(ellipse 26% 11% at 50% 76%, rgba(255,255,255,.65), transparent 100%),
+    radial-gradient(ellipse 30% 8% at 50% 97%, rgba(55,32,27,.38), transparent 100%),
+    radial-gradient(ellipse 14% 20% at 14% 78%, rgba(75,43,34,.32), transparent 100%),
+    radial-gradient(ellipse 14% 20% at 86% 78%, rgba(75,43,34,.32), transparent 100%);
+  filter:blur(.2cqw);
+}
+
+/* ===== MOUTH ===== */
+.mouth{left:42.5%;top:56.2%;width:15%;height:5.6%;z-index:6}
+.mouth::before{ /* lip line */
+  content:"";position:absolute;left:2%;top:44%;width:96%;height:9%;
+  border-radius:50%;
+  background:radial-gradient(ellipse at 50% 50%,rgba(45,24,19,.8),rgba(70,42,34,.4) 70%,transparent 100%);
+  filter:blur(.15cqw);
+}
+
+/* ===== UPPER LIP ===== */
+.upper-lip{
+  left:0;top:0;width:100%;height:47%;z-index:1;
+  background:linear-gradient(#b77e67,#915a47);
+  clip-path:polygon(0 72%,10% 40%,30% 14%,43% 4%,50% 22%,57% 4%,70% 14%,90% 40%,100% 72%,100% 100%,0 100%);
+  filter:blur(.12cqw);
+}
+
+/* ===== LOWER LIP ===== */
+.lower-lip{
+  left:7%;bottom:0;width:86%;height:56%;z-index:1;
+  border-radius:18% 18% 50% 50% / 20% 20% 100% 100%;
+  background:
+    radial-gradient(ellipse 40% 35% at 50% 40%, rgba(255,255,255,.7), transparent 100%),
+    linear-gradient(#c28b74,#a96f59);
+  box-shadow:inset 0 -.5cqw .7cqw rgba(70,40,32,.25);
+}
+.mouth::after{
+  content:"";position:absolute;left:8%;top:22%;width:84%;height:64%;z-index:0;
+  transform:scaleY(.08);transform-origin:center;border-radius:50%;
+  background:linear-gradient(#210d0b 0 62%,#63342d);
+}
+.head-turn.is-speaking .mouth::after{animation:mouth-open .19s ease-in-out infinite alternate}
+.head-turn.is-speaking .upper-lip{animation:upper-lip-talk .19s ease-in-out infinite alternate}
+.head-turn.is-speaking .lower-lip{animation:lower-lip-talk .19s ease-in-out infinite alternate}
+@keyframes mouth-open{from{transform:scaleY(.08)}to{transform:scaleY(1)}}
+@keyframes upper-lip-talk{from{transform:scaleY(1)}to{transform:scaleY(.82)}}
+@keyframes lower-lip-talk{from{transform:translateY(0) scaleY(1)}to{transform:translateY(12%) scaleY(.9)}}
+
+/* ===== CHIN ===== */
+.chin{
+  left:38%;top:60.5%;width:24%;height:10%;z-index:4;
+  background:
+    linear-gradient(rgba(75,43,34,.28) 0%,transparent 28%),
+    radial-gradient(ellipse 45% 40% at 50% 62%, rgba(255,255,255,.55), transparent 100%),
+    radial-gradient(ellipse 70% 40% at 50% 100%, rgba(70,40,32,.28), transparent 100%);
+  filter:blur(.3cqw);
+}
+
+/* ===== SKIN SHADING (key light, side falloff, vignette) ===== */
+.skin-shading{
+  left:24%;top:4%;width:52%;height:66%;z-index:10;pointer-events:none;
+  border-radius:var(--head-radius);
+  background:
+    radial-gradient(ellipse 50% 30% at 42% 14%, rgba(255,255,255,.3), transparent 100%),
+    radial-gradient(ellipse 22% 8% at 50% 59%, rgba(60,60,70,.0), transparent 100%),
+    linear-gradient(90deg,rgba(50,29,24,.4) 0%,rgba(50,29,24,.06) 16%,transparent 30%,transparent 70%,rgba(50,29,24,.08) 84%,rgba(50,29,24,.42) 100%),
+    linear-gradient(transparent 80%,rgba(60,35,28,.24));
+}
+
+/* ===== CURSOR-TRACKING EYES ===== */
+.eye::before{
+  left:calc(31% + var(--gaze-x, 0%));
+  top:calc(17% + var(--gaze-y, 0%));
+}
+.eye::after{
+  left:calc(42% + var(--gaze-x, 0%));
+  top:calc(35% + var(--gaze-y, 0%));
+}
+</style>
+</head>
+<body>
+<svg class="matrix-background" aria-hidden="true" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1000 700">
+  <defs>
+    <linearGradient id="matrixBase" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#03131f"/>
+      <stop offset=".52" stop-color="#062537"/>
+      <stop offset="1" stop-color="#03131f"/>
+    </linearGradient>
+    <pattern id="binaryPattern" width="184" height="142" patternUnits="userSpaceOnUse">
+      <g fill="#00b9e9" font-family="monospace" font-size="10">
+        <text x="2" y="14" opacity=".38">01001011010110100101</text>
+        <text x="9" y="33" opacity=".2">10110100101101001010</text>
+        <text x="-2" y="52" opacity=".42">11001010010110110100</text>
+        <text x="6" y="71" opacity=".18">00101101001011010011</text>
+        <text x="0" y="90" opacity=".34">10100110101100101010</text>
+        <text x="11" y="109" opacity=".2">01011010010110100101</text>
+        <text x="-4" y="128" opacity=".4">10010110100101101001</text>
+        <text x="80" y="14" opacity=".22">10110100</text>
+        <text x="91" y="52" opacity=".18">01001011</text>
+        <text x="72" y="90" opacity=".25">11010010</text>
+        <text x="101" y="128" opacity=".2">00101101</text>
+      </g>
+      <path d="M34 0v142M126 0v142" stroke="#00a8d5" stroke-opacity=".08"/>
+    </pattern>
+  </defs>
+  <path fill="url(#matrixBase)" d="M0 0h1000v700H0z"/>
+  <path fill="url(#binaryPattern)" d="M0 0h1000v700H0z"/>
+  <path fill="url(#matrixBase)" opacity=".28" d="M0 0h1000v700H0z"/>
+</svg>
+<main class="studio">
+<aside class="camera-panel" aria-label="Webcam preview">
+  <h2 class="panel-title">LIVE CAMERA · HAND TRACKING</h2>
+  <div class="video-stage">
+    <video id="camera-preview" autoplay muted playsinline aria-label="Live webcam preview"></video>
+    <canvas id="camera-hand-overlay" aria-hidden="true"></canvas>
+    <canvas id="camera-person-overlay" aria-hidden="true"></canvas>
+  </div>
+  <div class="camera-controls">
+    <button id="camera-toggle" type="button">Start camera</button>
+    <span id="camera-status" class="camera-status" role="status" aria-live="polite">Camera is off</span>
+  </div>
+  <div class="phone-companion-controls">
+    <button id="phone-pair" type="button">Pair phone camera</button>
+    <div id="phone-pair-details" class="phone-pair-details" hidden>
+      <span>On your phone, open:</span>
+      <a id="phone-pair-url" rel="noreferrer"></a>
+      <span>Enter this one-time code (expires in 5 minutes):</span>
+      <strong id="phone-pair-code" class="phone-pair-code"></strong>
+      <span id="phone-pair-status" role="status" aria-live="polite">Waiting for phone…</span>
+      <button id="phone-disconnect" type="button">Disconnect phone</button>
+    </div>
+  </div>
+  <div id="person-alert" class="person-alert" data-detected="false" role="status" aria-live="polite">PERSON TRACKING · WAITING FOR CAMERA</div>
+  <div class="voice-controls">
+    <label for="voice-language">Speech:</label>
+    <select id="voice-language" class="voice-language">
+      <option value="en">English</option>
+      <option value="ur">Urdu (اردو)</option>
+    </select>
+    <button id="voice-toggle" type="button">Start listening</button>
+    <span id="voice-status" class="voice-status" role="status" aria-live="polite">Say “Jarvis” to call me</span>
+  </div>
+  <div class="whatsapp-controls">
+    <button id="whatsapp-open" type="button">Open WhatsApp Web</button>
+    <span id="whatsapp-status" class="whatsapp-status" role="status" aria-live="polite">Install the Jarvis WhatsApp extension to use voice messaging.</span>
+  </div>
+  <details class="delivery-contacts">
+    <summary>Delivery contacts · saved number lookup</summary>
+    <div class="delivery-contact-content">
+      <p class="delivery-contact-note">Enter a number in international format (+country code). Its country/numbering region is inferred from the prefix; this is not a person's live location. Enter the name yourself. Records stay on this device.</p>
+      <form id="delivery-contact-form" class="delivery-contact-form">
+        <label for="delivery-phone">Phone number
+          <input id="delivery-phone" name="phone" type="tel" autocomplete="tel" placeholder="+92 300 1234567" required>
+        </label>
+        <label for="delivery-name">Customer name
+          <input id="delivery-name" name="name" type="text" autocomplete="name" maxlength="100" required>
+        </label>
+        <div id="delivery-region" class="delivery-region" role="status" aria-live="polite">Enter a phone number with its +country code to see its numbering region.</div>
+        <button id="delivery-contact-save" class="delivery-contact-save" type="submit">Save delivery contact</button>
+      </form>
+      <div id="delivery-contact-status" class="delivery-contact-status" role="status" aria-live="polite"></div>
+      <p id="delivery-contact-empty" class="delivery-contact-empty">No delivery contacts saved yet.</p>
+      <ul id="delivery-contact-list" class="delivery-contact-list" aria-label="Saved delivery contacts"></ul>
+    </div>
+  </details>
+  <small class="camera-tip">Keep your face and shoulders in frame for red person tracking. Raise your hand for green hand tracking; camera frames stay on this device.</small>
+  <small class="voice-note">Run start-local-voice.bat and keep its window open. For voice and face tracking, use <a href="http://127.0.0.1:8000/">Jarvis on localhost</a>. First speech setup downloads the offline multilingual model.</small>
+  <small class="voice-note">To draft a message: “Jarvis, message to Ali saying hello” or “Jarvis, علی کو پیغام بھیجو: میں پانچ بجے آؤں گا”. Jarvis reads it back; say “yes, send it” or “no, cancel”.</small>
+  <details class="command-guide">
+    <summary>Show 100 things to ask Jarvis</summary>
+    <ol id="command-list"><li>Start listening to load the offline command list.</li></ol>
+  </details>
+</aside>
+<aside class="hand-panel" aria-label="Live hand tracking and movement graph">
+  <div class="tracker-tabs" role="tablist" aria-label="Choose tracker view">
+    <button id="hand-tab" class="tracker-tab" type="button" role="tab" aria-selected="true" aria-controls="hand-view">Hand Tracker</button>
+    <button id="person-tab" class="tracker-tab" type="button" role="tab" aria-selected="false" aria-controls="person-view">Human Tracker</button>
+  </div>
+  <section id="hand-view" class="tracker-view tracker-view-hand" role="tabpanel" aria-labelledby="hand-tab">
+    <section class="hand-stage" aria-label="Handwriting board">
+      <canvas id="hand-preview" aria-label="Handwritten finger strokes"></canvas>
+      <canvas id="hand-cursor" aria-hidden="true"></canvas>
+    </section>
+    <div class="board-controls">
+      <span class="board-hint">Point index finger to write · open palm to pause</span>
+      <button id="clear-board" type="button">Clear</button>
+    </div>
+    <div id="hand-state" class="hand-state" aria-live="polite">Waiting for camera and hand…</div>
+    <div id="hand-status" class="hand-status" role="status" aria-live="polite">Start the camera to load local hand tracking.</div>
+    <section class="motion-section" aria-label="Hand movement graph">
+      <h2 class="motion-title">LIVE HAND SPEED &amp; MOVEMENT GRAPH</h2>
+      <div class="motion-stage"><canvas id="motion-graph" aria-label="Graph of finger position and movement speed over time"></canvas></div>
+    </section>
+  </section>
+  <section id="person-view" class="tracker-view tracker-view-human" role="tabpanel" aria-labelledby="person-tab" hidden>
+    <section class="person-stage" aria-label="Live tracked human pose">
+      <canvas id="person-preview" aria-label="Live human skeleton graph"></canvas>
+      <span id="person-stage-status" class="person-stage-status">Waiting for a person…</span>
+    </section>
+    <div class="board-controls">
+      <span class="board-hint">Live red body-skeleton tracker</span>
+      <button id="alarm-toggle" class="alarm-toggle" type="button" aria-pressed="false">Enable beep alarm</button>
+    </div>
+    <section class="person-status-panel" aria-label="Human tracking status">
+      <h2>HUMAN GRAPH / TRACKING</h2>
+      <div id="person-status" class="hand-state" aria-live="polite">Person detector starts with the camera.</div>
+    </section>
+  </section>
+</aside>
+<!-- Existing .character wrapper (created here because none was present) -->
+<div class="character">
+  <div class="head-container">
+    <div class="bust-turn">
+    <div class="front-view">
+    <div class="shoulders"></div>
+    <div class="neck"></div>
+    <div class="neck-muscle left"></div>
+    <div class="neck-muscle right"></div>
+    <div class="suit-shirt"></div>
+    <div class="waistcoat"></div>
+    <div class="suit-lapel left"></div>
+    <div class="suit-lapel right"></div>
+    <div class="shirt-collar left"></div>
+    <div class="shirt-collar right"></div>
+    <div class="necktie"></div>
+    <div class="head-turn">
+    <div class="head-back"></div>
+    <div class="ear left"></div>
+    <div class="ear right"></div>
+    <div class="head"></div>
+    <svg class="hair-art" viewBox="0 0 320 190" aria-hidden="true">
+      <defs>
+        <linearGradient id="hairBase" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#080809"/>
+          <stop offset=".32" stop-color="#242326"/>
+          <stop offset=".58" stop-color="#111113"/>
+          <stop offset=".78" stop-color="#29282b"/>
+          <stop offset="1" stop-color="#070708"/>
+        </linearGradient>
+        <linearGradient id="hairLock" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#343337"/>
+          <stop offset=".48" stop-color="#111113"/>
+          <stop offset="1" stop-color="#050506"/>
+        </linearGradient>
+        <clipPath id="hairShape">
+          <path d="M48 160C32 149 23 127 23 104C14 78 28 53 51 40C59 19 84 14 105 19C130 2 164 1 190 12C219 7 249 22 266 42C291 53 303 77 298 101C305 126 290 151 271 166L260 145C257 163 248 176 235 184C235 164 226 151 215 143C210 163 198 177 185 183C188 162 176 149 164 140C158 159 147 172 133 179C136 159 124 144 112 136C104 153 92 164 78 170C82 151 70 137 60 130C57 143 53 153 48 160Z"/>
+        </clipPath>
+      </defs>
+      <path fill="url(#hairBase)" d="M48 160C32 149 23 127 23 104C14 78 28 53 51 40C59 19 84 14 105 19C130 2 164 1 190 12C219 7 249 22 266 42C291 53 303 77 298 101C305 126 290 151 271 166L260 145C257 163 248 176 235 184C235 164 226 151 215 143C210 163 198 177 185 183C188 162 176 149 164 140C158 159 147 172 133 179C136 159 124 144 112 136C104 153 92 164 78 170C82 151 70 137 60 130C57 143 53 153 48 160Z"/>
+      <g clip-path="url(#hairShape)" fill="none" stroke-linecap="round">
+        <path d="M34 105C56 77 79 49 119 35C149 24 177 28 202 43" stroke="#555357" stroke-width="5" opacity=".72"/>
+        <path d="M42 115C69 88 92 61 128 46C155 35 178 39 198 51" stroke="#77757a" stroke-width="2.5" opacity=".66"/>
+        <path d="M57 126C83 100 106 75 139 60C166 48 192 54 215 69" stroke="#414045" stroke-width="5" opacity=".9"/>
+        <path d="M73 137C99 113 119 90 147 76C174 63 199 70 220 84" stroke="#66646a" stroke-width="2.5" opacity=".72"/>
+        <path d="M93 143C115 123 132 103 155 91C178 80 198 83 216 96" stroke="#333236" stroke-width="4" opacity=".9"/>
+        <path d="M52 65C88 31 133 18 169 21C198 23 222 34 241 50" stroke="#3b3a3e" stroke-width="3" opacity=".8"/>
+        <path d="M231 48C255 67 268 88 270 116C271 136 263 151 252 164" stroke="#454449" stroke-width="4" opacity=".75"/>
+        <path d="M43 81C28 104 36 132 51 148" stroke="#323135" stroke-width="4" opacity=".82"/>
+      </g>
+      <path fill="url(#hairLock)" d="M35 111C56 82 80 52 119 39C149 28 178 33 203 49C181 43 160 52 144 68C170 57 198 63 220 80C193 72 169 83 151 104C137 90 125 81 111 78C98 103 78 124 54 141C61 122 50 111 35 111Z"/>
+      <path d="M48 105C72 78 97 56 130 45C154 37 177 41 194 53M65 119C91 94 111 74 140 62C163 52 184 57 203 71M84 129C107 108 125 91 149 80C170 71 188 75 204 87" fill="none" stroke="#555358" stroke-width="2.2" stroke-linecap="round" opacity=".82"/>
+    </svg>
+    <div class="forehead"></div>
+    <div class="temple left"></div>
+    <div class="temple right"></div>
+    <div class="jaw"></div>
+    <div class="cheek left"></div>
+    <div class="cheek right"></div>
+    <div class="eyebrow left"></div>
+    <div class="eyebrow right"></div>
+    <div class="eye-socket left"></div>
+    <div class="eye-socket right"></div>
+    <div class="eye left"></div>
+    <div class="eye right"></div>
+    <div class="eyelid-crease left"></div>
+    <div class="eyelid-crease right"></div>
+    <div class="upper-eyelid left"></div>
+    <div class="upper-eyelid right"></div>
+    <div class="lower-eyelid left"></div>
+    <div class="lower-eyelid right"></div>
+    <div class="upper-eyelashes left"></div>
+    <div class="upper-eyelashes right"></div>
+    <div class="lower-eyelashes left"></div>
+    <div class="lower-eyelashes right"></div>
+    <svg class="glasses" viewBox="0 0 400 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="glassesFrame" x1="0" y1="0" x2="0" y2="1">
+          <stop stop-color="#333638"/>
+          <stop offset=".42" stop-color="#080b0c"/>
+          <stop offset=".72" stop-color="#1c2021"/>
+          <stop offset="1" stop-color="#050607"/>
+        </linearGradient>
+        <linearGradient id="lensShine" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="#e6fbff" stop-opacity=".27"/>
+          <stop offset=".5" stop-color="#b4e5ef" stop-opacity=".04"/>
+          <stop offset="1" stop-color="#fff" stop-opacity=".12"/>
+        </linearGradient>
+      </defs>
+      <g fill="url(#lensShine)" stroke="url(#glassesFrame)" stroke-width="8" stroke-linejoin="round">
+        <path d="M66 30Q66 18 80 18H168Q183 18 184 32L180 61Q178 78 162 80H87Q71 79 69 63Z"/>
+        <path d="M334 30Q334 18 320 18H232Q217 18 216 32L220 61Q222 78 238 80H313Q329 79 331 63Z"/>
+      </g>
+      <path d="M183 38Q200 30 217 38L216 48Q200 43 184 48Z" fill="url(#glassesFrame)"/>
+      <path d="M67 30L32 24Q25 23 23 31L20 42M333 30L368 24Q375 23 377 31L380 42" fill="none" stroke="url(#glassesFrame)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M82 24H112M247 24H277" stroke="#f6ffff" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <div class="nose"></div>
+    <div class="mouth">
+      <div class="upper-lip"></div>
+      <div class="lower-lip"></div>
+    </div>
+    <div class="chin"></div>
+    <div class="skin-shading"></div>
+    </div>
+    </div>
+    <svg class="rear-view" viewBox="0 0 500 625" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="rearSkin" x1="0" y1="0" x2="1" y2="0">
+          <stop stop-color="#754536"/>
+          <stop offset=".24" stop-color="#A96F59"/>
+          <stop offset=".52" stop-color="#c38b72"/>
+          <stop offset=".78" stop-color="#A96F59"/>
+          <stop offset="1" stop-color="#754536"/>
+        </linearGradient>
+        <linearGradient id="rearHair" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="#09090a"/>
+          <stop offset=".48" stop-color="#252427"/>
+          <stop offset="1" stop-color="#080809"/>
+        </linearGradient>
+        <linearGradient id="rearSuit" x1="0" y1="0" x2="1" y2="0">
+          <stop stop-color="#09090b"/>
+          <stop offset=".25" stop-color="#211e20"/>
+          <stop offset=".5" stop-color="#111012"/>
+          <stop offset=".78" stop-color="#211e20"/>
+          <stop offset="1" stop-color="#09090b"/>
+        </linearGradient>
+      </defs>
+      <path d="M0 625V487Q3 444 75 419L155 394H345L425 419Q497 444 500 487V625Z" fill="url(#rearSuit)"/>
+      <path d="M198 365H302L311 455Q250 482 189 455Z" fill="url(#rearSkin)"/>
+      <path d="M125 61Q140 24 188 25Q250 0 312 25Q359 28 376 69L391 169Q387 262 342 330Q310 383 250 403Q190 383 158 330Q113 262 109 169Z" fill="url(#rearSkin)"/>
+      <path d="M111 164Q97 143 101 119Q105 94 124 98Q139 102 140 132L137 190Q130 211 119 196Z" fill="#A96F59" stroke="#754536" stroke-opacity=".5" stroke-width="4"/>
+      <path d="M389 164Q403 143 399 119Q395 94 376 98Q361 102 360 132L363 190Q370 211 381 196Z" fill="#A96F59" stroke="#754536" stroke-opacity=".5" stroke-width="4"/>
+      <path d="M113 160Q107 126 120 113Q131 120 129 151L124 177Z M387 160Q393 126 380 113Q369 120 371 151L376 177Z" fill="#754536" opacity=".8"/>
+      <path d="M113 165Q97 129 113 85Q126 43 169 33Q195 7 251 10Q308 7 336 34Q376 46 387 91Q399 130 382 172L370 205Q360 185 355 164Q340 202 320 216L315 181Q296 210 275 223L270 189Q250 218 230 228L229 190Q206 214 184 218L189 184Q163 204 143 201L151 169Q132 190 113 165Z" fill="url(#rearHair)"/>
+      <path d="M133 443Q250 473 367 443L426 420Q492 442 500 487V625H0V487Q8 442 74 420Z" fill="url(#rearSuit)"/>
+      <path d="M200 411Q222 427 250 429Q278 427 300 411L324 455Q290 476 250 486Q210 476 176 455Z" fill="#ecebea"/>
+      <path d="M250 486V625M75 420Q105 444 139 462M425 420Q395 444 361 462" fill="none" stroke="#3b3739" stroke-width="3" opacity=".72"/>
+      <path d="M83 430Q151 462 183 540M417 430Q349 462 317 540" fill="none" stroke="#4a4548" stroke-width="4" opacity=".35"/>
+    </svg>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cameraVideo = document.querySelector("#camera-preview");
+const cameraToggle = document.querySelector("#camera-toggle");
+const cameraStatus = document.querySelector("#camera-status");
+const voiceToggle = document.querySelector("#voice-toggle");
+const voiceStatus = document.querySelector("#voice-status");
+const voiceLanguage = document.querySelector("#voice-language");
+const whatsappOpen = document.querySelector("#whatsapp-open");
+const whatsappStatus = document.querySelector("#whatsapp-status");
+const deliveryContactForm = document.querySelector("#delivery-contact-form");
+const deliveryPhone = document.querySelector("#delivery-phone");
+const deliveryName = document.querySelector("#delivery-name");
+const deliveryRegion = document.querySelector("#delivery-region");
+const deliveryContactSave = document.querySelector("#delivery-contact-save");
+const deliveryContactStatus = document.querySelector("#delivery-contact-status");
+const deliveryContactEmpty = document.querySelector("#delivery-contact-empty");
+const deliveryContactList = document.querySelector("#delivery-contact-list");
+const headTurn = document.querySelector(".head-turn");
+const cameraOverlay = document.querySelector("#camera-hand-overlay");
+const cameraPersonOverlay = document.querySelector("#camera-person-overlay");
+const handPreview = document.querySelector("#hand-preview");
+const handCursor = document.querySelector("#hand-cursor");
+const motionGraph = document.querySelector("#motion-graph");
+const handState = document.querySelector("#hand-state");
+const handStatus = document.querySelector("#hand-status");
+const clearBoard = document.querySelector("#clear-board");
+const handTab = document.querySelector("#hand-tab");
+const personTab = document.querySelector("#person-tab");
+const handView = document.querySelector("#hand-view");
+const personView = document.querySelector("#person-view");
+const personPreview = document.querySelector("#person-preview");
+const personStageStatus = document.querySelector("#person-stage-status");
+const personStatus = document.querySelector("#person-status");
+const personAlert = document.querySelector("#person-alert");
+const alarmToggle = document.querySelector("#alarm-toggle");
+const cameraPanel = document.querySelector(".camera-panel");
+let cameraStream = null;
+let cameraStreamIsRemote = false;
+let phoneSignalSocket = null;
+let phonePeerConnection = null;
+let phoneSessionToken = null;
+let phoneOrigin = "__JARVIS_PHONE_ORIGIN__";
+let phoneDisconnecting = false;
+const pendingPhoneIceCandidates = [];
+const phonePairButton = document.querySelector("#phone-pair");
+const phonePairDetails = document.querySelector("#phone-pair-details");
+const phonePairUrl = document.querySelector("#phone-pair-url");
+const phonePairCode = document.querySelector("#phone-pair-code");
+const phonePairStatus = document.querySelector("#phone-pair-status");
+const phoneDisconnectButton = document.querySelector("#phone-disconnect");
+let faceSocket = null;
+let faceFrameTimer = 0;
+let faceCanvas = null;
+let cameraStartedAt = 0;
+let noFaceSince = 0;
+let absenceReminderShown = false;
+let voiceSocket = null;
+let microphoneStream = null;
+let audioContext = null;
+let audioSource = null;
+let audioProcessor = null;
+let alarmAudioContext = null;
+let alarmEnabled = false;
+let listeningForJarvis = false;
+let isSpeaking = false;
+let isAwake = false;
+let blinkTimer = 0;
+let awakeTimer = 0;
+let targetLookX = 0;
+let targetLookY = 0;
+let lookX = 0;
+let lookY = 0;
+let lookFrame = 0;
+let handLandmarker = null;
+let handLandmarkerPromise = null;
+let visionModulePromise = null;
+let handFrameRequest = 0;
+let lastHandFrameTime = 0;
+let lastGraphSample = 0;
+let handLastSeenAt = 0;
+let previousPenPoint = null;
+let writingBoardInitialized = false;
+let latestHands = [];
+const motionSamples = [];
+let poseLandmarker = null;
+let poseLandmarkerPromise = null;
+let lastPoseFrameTime = 0;
+let lastPoseCount = 0;
+let lastPersonSeenAt = 0;
+let personCount = 0;
+let candidatePoseCount = 0;
+let candidatePoseFrames = 0;
+let currentPoses = [];
+const handConnections = [
+  [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],[0,17]
+];
+const handColors = ["#33ff91", "#28d9ff"];
+const poseConnections = [
+  [11,12],[11,13],[13,15],[15,17],[15,19],[15,21],[17,19],
+  [12,14],[14,16],[16,18],[16,20],[16,22],[18,20],
+  [11,23],[12,24],[23,24],[23,25],[25,27],[27,29],[29,31],[27,31],
+  [24,26],[26,28],[28,30],[30,32],[28,32]
+];
+const poseCoreLandmarks = [0,11,12,13,14,15,16,23,24];
+const deliveryContactStorageKey = "jarvis-delivery-contacts-v1";
+let deliveryContacts = [];
+let matchedDeliveryPhone = "";
+const phoneCallingRegions = new Map(Object.entries({
+  "1": "North American Numbering Plan (US, Canada and Caribbean)",
+  "7": "Russia / Kazakhstan numbering zone",
+  "20": "Egypt",
+  "27": "South Africa",
+  "30": "Greece",
+  "31": "Netherlands",
+  "32": "Belgium",
+  "33": "France",
+  "34": "Spain",
+  "36": "Hungary",
+  "39": "Italy / Vatican City",
+  "40": "Romania",
+  "41": "Switzerland",
+  "43": "Austria",
+  "44": "United Kingdom",
+  "45": "Denmark",
+  "46": "Sweden",
+  "47": "Norway",
+  "48": "Poland",
+  "49": "Germany",
+  "51": "Peru",
+  "52": "Mexico",
+  "53": "Cuba",
+  "54": "Argentina",
+  "55": "Brazil",
+  "56": "Chile",
+  "57": "Colombia",
+  "58": "Venezuela",
+  "60": "Malaysia",
+  "61": "Australia",
+  "62": "Indonesia",
+  "63": "Philippines",
+  "64": "New Zealand",
+  "65": "Singapore",
+  "66": "Thailand",
+  "81": "Japan",
+  "82": "South Korea",
+  "84": "Vietnam",
+  "86": "China",
+  "90": "Türkiye",
+  "91": "India",
+  "92": "Pakistan",
+  "93": "Afghanistan",
+  "94": "Sri Lanka",
+  "95": "Myanmar",
+  "98": "Iran",
+  "211": "South Sudan",
+  "212": "Morocco / Western Sahara",
+  "213": "Algeria",
+  "216": "Tunisia",
+  "218": "Libya",
+  "220": "The Gambia",
+  "221": "Senegal",
+  "222": "Mauritania",
+  "223": "Mali",
+  "224": "Guinea",
+  "225": "Côte d’Ivoire",
+  "226": "Burkina Faso",
+  "227": "Niger",
+  "228": "Togo",
+  "229": "Benin",
+  "230": "Mauritius",
+  "231": "Liberia",
+  "232": "Sierra Leone",
+  "233": "Ghana",
+  "234": "Nigeria",
+  "235": "Chad",
+  "236": "Central African Republic",
+  "237": "Cameroon",
+  "238": "Cabo Verde",
+  "239": "São Tomé and Príncipe",
+  "240": "Equatorial Guinea",
+  "241": "Gabon",
+  "242": "Republic of the Congo",
+  "243": "Democratic Republic of the Congo",
+  "244": "Angola",
+  "245": "Guinea-Bissau",
+  "246": "British Indian Ocean Territory",
+  "248": "Seychelles",
+  "249": "Sudan",
+  "250": "Rwanda",
+  "251": "Ethiopia",
+  "252": "Somalia",
+  "253": "Djibouti",
+  "254": "Kenya",
+  "255": "Tanzania",
+  "256": "Uganda",
+  "257": "Burundi",
+  "258": "Mozambique",
+  "260": "Zambia",
+  "261": "Madagascar",
+  "262": "Réunion / Mayotte",
+  "263": "Zimbabwe",
+  "264": "Namibia",
+  "265": "Malawi",
+  "266": "Lesotho",
+  "267": "Botswana",
+  "268": "Eswatini",
+  "269": "Comoros",
+  "290": "Saint Helena / Tristan da Cunha",
+  "291": "Eritrea",
+  "297": "Aruba",
+  "298": "Faroe Islands",
+  "299": "Greenland",
+  "350": "Gibraltar",
+  "351": "Portugal",
+  "352": "Luxembourg",
+  "353": "Ireland",
+  "354": "Iceland",
+  "355": "Albania",
+  "356": "Malta",
+  "357": "Cyprus",
+  "358": "Finland / Åland Islands",
+  "359": "Bulgaria",
+  "370": "Lithuania",
+  "371": "Latvia",
+  "372": "Estonia",
+  "373": "Moldova",
+  "374": "Armenia",
+  "375": "Belarus",
+  "376": "Andorra",
+  "377": "Monaco",
+  "378": "San Marino",
+  "380": "Ukraine",
+  "381": "Serbia",
+  "382": "Montenegro",
+  "383": "Kosovo",
+  "385": "Croatia",
+  "386": "Slovenia",
+  "387": "Bosnia and Herzegovina",
+  "389": "North Macedonia",
+  "420": "Czechia",
+  "421": "Slovakia",
+  "423": "Liechtenstein",
+  "500": "Falkland Islands",
+  "501": "Belize",
+  "502": "Guatemala",
+  "503": "El Salvador",
+  "504": "Honduras",
+  "505": "Nicaragua",
+  "506": "Costa Rica",
+  "507": "Panama",
+  "508": "Saint Pierre and Miquelon",
+  "509": "Haiti",
+  "591": "Bolivia",
+  "592": "Guyana",
+  "593": "Ecuador",
+  "594": "French Guiana",
+  "595": "Paraguay",
+  "597": "Suriname",
+  "598": "Uruguay",
+  "599": "Caribbean Netherlands / Curaçao",
+  "670": "Timor-Leste",
+  "672": "Australian external territories",
+  "673": "Brunei",
+  "674": "Nauru",
+  "675": "Papua New Guinea",
+  "676": "Tonga",
+  "677": "Solomon Islands",
+  "678": "Vanuatu",
+  "679": "Fiji",
+  "680": "Palau",
+  "681": "Wallis and Futuna",
+  "682": "Cook Islands",
+  "683": "Niue",
+  "685": "Samoa",
+  "686": "Kiribati",
+  "687": "New Caledonia",
+  "688": "Tuvalu",
+  "689": "French Polynesia",
+  "690": "Tokelau",
+  "691": "Micronesia",
+  "692": "Marshall Islands",
+  "800": "International toll-free service",
+  "808": "International shared-cost service",
+  "850": "North Korea",
+  "852": "Hong Kong",
+  "853": "Macau",
+  "855": "Cambodia",
+  "856": "Laos",
+  "880": "Bangladesh",
+  "886": "Taiwan",
+  "960": "Maldives",
+  "961": "Lebanon",
+  "962": "Jordan",
+  "963": "Syria",
+  "964": "Iraq",
+  "965": "Kuwait",
+  "966": "Saudi Arabia",
+  "967": "Yemen",
+  "968": "Oman",
+  "970": "Palestine",
+  "971": "United Arab Emirates",
+  "972": "Israel",
+  "973": "Bahrain",
+  "974": "Qatar",
+  "975": "Bhutan",
+  "976": "Mongolia",
+  "977": "Nepal",
+  "979": "International premium-rate service",
+  "992": "Tajikistan",
+  "993": "Turkmenistan",
+  "994": "Azerbaijan",
+  "995": "Georgia",
+  "996": "Kyrgyzstan",
+  "998": "Uzbekistan"
+}));
+const phoneCallingCodes = [...phoneCallingRegions.keys()].sort((left, right) => right.length - left.length);
+
+function normalizeDeliveryPhone(phone) {
+  return phone.replace(/\D/g, "");
+}
+
+function inferPhoneRegion(phone) {
+  const trimmedPhone = phone.trim();
+  if (!trimmedPhone.startsWith("+")) {
+    return "Enter an international number starting with + and its country code.";
+  }
+  const digits = normalizeDeliveryPhone(trimmedPhone);
+  const callingCode = phoneCallingCodes.find((code) => digits.startsWith(code));
+  return callingCode
+    ? phoneCallingRegions.get(callingCode)
+    : "Country/numbering region not recognized from this prefix.";
+}
+
+function setDeliveryContactStatus(message, isError = false) {
+  deliveryContactStatus.textContent = message;
+  deliveryContactStatus.dataset.error = String(isError);
+}
+
+function renderDeliveryContacts() {
+  deliveryContactList.replaceChildren();
+  deliveryContactEmpty.hidden = deliveryContacts.length > 0;
+  deliveryContacts.forEach((contact) => {
+    const item = document.createElement("li");
+    item.className = "delivery-contact-item";
+    const details = document.createElement("div");
+    details.className = "delivery-contact-details";
+    const name = document.createElement("strong");
+    name.textContent = contact.name;
+    const phone = document.createElement("span");
+    phone.textContent = contact.phone;
+    const location = document.createElement("span");
+    location.textContent = contact.region || inferPhoneRegion(contact.phone);
+    details.append(name, phone, location);
+
+    const remove = document.createElement("button");
+    remove.className = "delivery-contact-delete";
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.setAttribute("aria-label", `Remove delivery contact ${contact.name}`);
+    remove.addEventListener("click", () => {
+      const phoneKey = normalizeDeliveryPhone(contact.phone);
+      try {
+        persistDeliveryContacts(deliveryContacts.filter(
+          (savedContact) => normalizeDeliveryPhone(savedContact.phone) !== phoneKey
+        ));
+        if (matchedDeliveryPhone === phoneKey) {
+          deliveryContactForm.reset();
+          matchedDeliveryPhone = "";
+          deliveryContactSave.textContent = "Save delivery contact";
+        }
+        setDeliveryContactStatus(`${contact.name} was removed.`);
+      } catch (error) {
+        console.error("Could not remove the delivery contact:", error);
+        setDeliveryContactStatus(`Could not remove this contact: ${error.message || error}`, true);
+      }
+    });
+    item.append(details, remove);
+    deliveryContactList.append(item);
+  });
+}
+
+function persistDeliveryContacts(nextContacts) {
+  localStorage.setItem(deliveryContactStorageKey, JSON.stringify(nextContacts));
+  deliveryContacts = nextContacts;
+  renderDeliveryContacts();
+}
+
+function loadDeliveryContacts() {
+  try {
+    const savedContacts = localStorage.getItem(deliveryContactStorageKey);
+    if (savedContacts === null) return;
+    const parsedContacts = JSON.parse(savedContacts);
+    const validContacts = Array.isArray(parsedContacts) && parsedContacts.every((contact) =>
+      contact
+      && typeof contact.phone === "string"
+      && normalizeDeliveryPhone(contact.phone).length >= 7
+      && normalizeDeliveryPhone(contact.phone).length <= 15
+      && typeof contact.name === "string"
+      && (contact.region === undefined || typeof contact.region === "string")
+    );
+    if (!validContacts) throw new Error("Saved delivery contacts have an invalid format.");
+    deliveryContacts = parsedContacts;
+    renderDeliveryContacts();
+  } catch (error) {
+    console.error("Could not load delivery contacts:", error);
+    setDeliveryContactStatus(`Could not load saved contacts: ${error.message || error}`, true);
+  }
+}
+
+deliveryPhone.addEventListener("input", () => {
+  const phoneKey = normalizeDeliveryPhone(deliveryPhone.value);
+  deliveryRegion.textContent = inferPhoneRegion(deliveryPhone.value);
+  const match = deliveryContacts.find(
+    (contact) => normalizeDeliveryPhone(contact.phone) === phoneKey
+  );
+  if (match) {
+    deliveryName.value = match.name;
+    matchedDeliveryPhone = phoneKey;
+    deliveryContactSave.textContent = "Update delivery contact";
+    setDeliveryContactStatus(`Saved contact found: ${match.name} · ${match.region || inferPhoneRegion(match.phone)}.`);
+    return;
+  }
+
+  if (matchedDeliveryPhone && matchedDeliveryPhone !== phoneKey) {
+    const previousMatch = deliveryContacts.find(
+      (contact) => normalizeDeliveryPhone(contact.phone) === matchedDeliveryPhone
+    );
+    if (previousMatch && deliveryName.value === previousMatch.name) {
+      deliveryName.value = "";
+    }
+    matchedDeliveryPhone = "";
+    deliveryContactSave.textContent = "Save delivery contact";
+  }
+  if (phoneKey.length >= 7 && phoneKey.length <= 15) {
+    setDeliveryContactStatus("No saved name for this number. Enter the person's name to add it.");
+  } else {
+    setDeliveryContactStatus("");
+  }
+});
+
+deliveryContactForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!deliveryContactForm.reportValidity()) return;
+
+  const phone = deliveryPhone.value.trim();
+  const phoneKey = normalizeDeliveryPhone(phone);
+  const region = inferPhoneRegion(phone);
+  if (!phone.startsWith("+") || phoneKey.length < 7 || phoneKey.length > 15) {
+    setDeliveryContactStatus("Enter an international phone number with +country code and 7 to 15 digits.", true);
+    deliveryPhone.focus();
+    return;
+  }
+  if (region.startsWith("Country/numbering region not recognized")) {
+    setDeliveryContactStatus(region, true);
+    deliveryPhone.focus();
+    return;
+  }
+
+  const contact = {
+    phone,
+    name: deliveryName.value.trim(),
+    region
+  };
+  if (!contact.name) {
+    setDeliveryContactStatus("Enter the person's name.", true);
+    return;
+  }
+
+  const existingIndex = deliveryContacts.findIndex(
+    (savedContact) => normalizeDeliveryPhone(savedContact.phone) === phoneKey
+  );
+  const nextContacts = [...deliveryContacts];
+  if (existingIndex === -1) {
+    nextContacts.unshift(contact);
+  } else {
+    nextContacts[existingIndex] = contact;
+  }
+
+  try {
+    persistDeliveryContacts(nextContacts);
+    matchedDeliveryPhone = phoneKey;
+    deliveryContactSave.textContent = "Update delivery contact";
+    setDeliveryContactStatus(
+      existingIndex === -1
+        ? `Saved ${contact.name} · ${contact.region} on this device.`
+        : `Updated ${contact.name} · ${contact.region} on this device.`
+    );
+  } catch (error) {
+    console.error("Could not save the delivery contact:", error);
+    setDeliveryContactStatus(`Could not save this contact: ${error.message || error}`, true);
+  }
+});
+
+loadDeliveryContacts();
+
+function sizeCanvas(canvas, preserve = false) {
+  const bounds = canvas.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return null;
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.round(bounds.width * ratio);
+  const height = Math.round(bounds.height * ratio);
+  const resized = canvas.width !== width || canvas.height !== height;
+  let previousImage = null;
+  if (resized && preserve && canvas.width && canvas.height) {
+    previousImage = document.createElement("canvas");
+    previousImage.width = canvas.width;
+    previousImage.height = canvas.height;
+    previousImage.getContext("2d").drawImage(canvas, 0, 0);
+  }
+  if (resized) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const context = canvas.getContext("2d");
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  if (previousImage) context.drawImage(previousImage, 0, 0, bounds.width, bounds.height);
+  return { context, width: bounds.width, height: bounds.height, resized };
+}
+
+function loadVisionModule() {
+  if (!visionModulePromise) {
+    visionModulePromise = import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  }
+  return visionModulePromise;
+}
+
+async function loadHandLandmarker() {
+  if (!handLandmarkerPromise) {
+    handLandmarkerPromise = (async () => {
+      const vision = await loadVisionModule();
+      const files = await vision.FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      const options = {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      };
+      try {
+        return await vision.HandLandmarker.createFromOptions(files, options);
+      } catch (gpuError) {
+        handStatus.textContent = `GPU hand tracking unavailable; switching to CPU (${gpuError.message || gpuError}).`;
+        handStatus.dataset.error = "false";
+        return vision.HandLandmarker.createFromOptions(files, {
+          ...options,
+          baseOptions: { ...options.baseOptions, delegate: "CPU" }
+        });
+      }
+    })();
+  }
+  try {
+    return await handLandmarkerPromise;
+  } catch (error) {
+    handLandmarkerPromise = null;
+    throw error;
+  }
+}
+
+async function loadPoseLandmarker() {
+  if (!poseLandmarkerPromise) {
+    poseLandmarkerPromise = (async () => {
+      const vision = await loadVisionModule();
+      const files = await vision.FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      const options = {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.55,
+        minPosePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      };
+      try {
+        return await vision.PoseLandmarker.createFromOptions(files, options);
+      } catch (gpuError) {
+        personStatus.textContent = `GPU body tracking unavailable; switching to CPU (${gpuError.message || gpuError}).`;
+        return vision.PoseLandmarker.createFromOptions(files, {
+          ...options,
+          baseOptions: { ...options.baseOptions, delegate: "CPU" }
+        });
+      }
+    })();
+  }
+  try {
+    return await poseLandmarkerPromise;
+  } catch (error) {
+    poseLandmarkerPromise = null;
+    throw error;
+  }
+}
+
+function drawTrackedHands(canvas, hands, mirrored = false) {
+  if (canvas === handPreview) {
+    drawWritingHand(hands);
+    return;
+  }
+  let ctx;
+  let width;
+  let height;
+  if (canvas === cameraOverlay && cameraVideo.videoWidth) {
+    width = cameraVideo.videoWidth;
+    height = cameraVideo.videoHeight;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    ctx = canvas.getContext("2d");
+  } else {
+    const size = sizeCanvas(canvas);
+    if (!size) return;
+    ({ context: ctx, width, height } = size);
+  }
+  ctx.clearRect(0, 0, width, height);
+  hands.forEach((landmarks, handIndex) => {
+    const color = handColors[handIndex % handColors.length];
+    const point = (index) => {
+      const landmark = landmarks[index];
+      const x = mirrored ? 1 - landmark.x : landmark.x;
+      return [x * width, landmark.y * height];
+    };
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, width * (canvas === cameraOverlay ? 0.006 : 0.009));
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    handConnections.forEach(([from, to]) => {
+      const [x1, y1] = point(from);
+      const [x2, y2] = point(to);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    });
+    landmarks.forEach((_, index) => {
+      const [x, y] = point(index);
+      ctx.beginPath();
+      ctx.arc(x, y, index === 0 || [4,8,12,16,20].includes(index) ? Math.max(3, width * .012) : Math.max(2, width * .007), 0, Math.PI * 2);
+      ctx.fillStyle = index === 0 ? "#e8fff2" : color;
+      ctx.fill();
+    });
+  });
+}
+
+function drawWritingGrid(ctx, width, height) {
+  ctx.fillStyle = "#020605";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "rgba(49,255,145,.1)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= width; x += 28) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+  }
+  for (let y = 0; y <= height; y += 28) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+  }
+}
+
+function drawWritingHand(hands) {
+  const board = sizeCanvas(handPreview, true);
+  const cursor = sizeCanvas(handCursor);
+  if (!board || !cursor) return;
+  const { context: ctx, width, height, resized } = board;
+  if (!writingBoardInitialized) {
+    drawWritingGrid(ctx, width, height);
+    writingBoardInitialized = true;
+  } else if (resized) {
+    ctx.strokeStyle = "rgba(49,255,145,.07)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= width; x += 28) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+    }
+    for (let y = 0; y <= height; y += 28) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+    }
+  }
+
+  const cursorCtx = cursor.context;
+  cursorCtx.clearRect(0, 0, cursor.width, cursor.height);
+  if (!hands.length) {
+    previousPenPoint = null;
+    handState.textContent = "Show your hand to start writing";
+    return;
+  }
+
+  const landmarks = hands[0];
+  const [tipX, tipY] = [1 - landmarks[8].x, landmarks[8].y];
+  const point = { x: tipX * width, y: tipY * height };
+  const isWriting = describeHand(landmarks) === "Pointing";
+  if (isWriting) {
+    if (previousPenPoint) {
+      ctx.beginPath();
+      ctx.moveTo(previousPenPoint.x, previousPenPoint.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.strokeStyle = "#62ff9e";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = "rgba(49,255,145,.72)";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    previousPenPoint = point;
+    handState.textContent = "Writing · move your index finger";
+  } else {
+    previousPenPoint = null;
+    handState.textContent = `${describeHand(landmarks)} · open palm to pause`;
+  }
+
+  cursorCtx.beginPath();
+  cursorCtx.arc(point.x, point.y, isWriting ? 6 : 4, 0, Math.PI * 2);
+  cursorCtx.fillStyle = isWriting ? "#c5ffda" : "#28d9ff";
+  cursorCtx.shadowColor = isWriting ? "#33ff91" : "#28d9ff";
+  cursorCtx.shadowBlur = 12;
+  cursorCtx.fill();
+  cursorCtx.shadowBlur = 0;
+}
+
+function clearWritingBoard() {
+  const board = sizeCanvas(handPreview);
+  if (!board) return;
+  drawWritingGrid(board.context, board.width, board.height);
+  writingBoardInitialized = true;
+  previousPenPoint = null;
+  motionSamples.length = 0;
+  drawMotionGraph();
+}
+
+clearBoard.addEventListener("click", clearWritingBoard);
+
+function selectTrackerView(view) {
+  const showHuman = view === "human";
+  handView.hidden = showHuman;
+  personView.hidden = !showHuman;
+  handTab.setAttribute("aria-selected", String(!showHuman));
+  personTab.setAttribute("aria-selected", String(showHuman));
+  handTab.tabIndex = showHuman ? -1 : 0;
+  personTab.tabIndex = showHuman ? 0 : -1;
+  if (showHuman) {
+    personTab.focus();
+    drawTrackedPoses(personPreview, currentPoses, true);
+  } else {
+    handTab.focus();
+    drawWritingHand(latestHands);
+    drawMotionGraph();
+  }
+}
+
+handTab.addEventListener("click", () => selectTrackerView("hand"));
+personTab.addEventListener("click", () => selectTrackerView("human"));
+for (const tab of [handTab, personTab]) {
+  tab.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    selectTrackerView(tab === handTab ? "human" : "hand");
+  });
+}
+
+function describeHand(landmarks) {
+  const wrist = landmarks[0];
+  const distanceFromWrist = (index) => Math.hypot(landmarks[index].x - wrist.x, landmarks[index].y - wrist.y);
+  const extended = [8, 12, 16, 20].map((tip, finger) =>
+    distanceFromWrist(tip) > distanceFromWrist([6, 10, 14, 18][finger]) * 1.18
+  );
+  const pinching = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y) < 0.065;
+  const raised = extended.filter(Boolean).length;
+  if (pinching) return "Pinch";
+  if (raised === 4) return "Open palm";
+  if (raised === 0) return "Fist";
+  if (extended[0] && raised === 1) return "Pointing";
+  return `${raised} fingers raised`;
+}
+
+function drawMotionGraph() {
+  const size = sizeCanvas(motionGraph);
+  if (!size) return;
+  const { context: ctx, width, height } = size;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#020a0f";
+  ctx.fillRect(0, 0, width, height);
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.strokeStyle = "rgba(111,173,190,.2)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = 10 + (height - 24) * i / 4;
+    ctx.beginPath(); ctx.moveTo(30, y); ctx.lineTo(width - 8, y); ctx.stroke();
+  }
+  ctx.fillStyle = "#9dbec9";
+  ctx.fillText("1", 8, 15);
+  ctx.fillText("0", 8, height - 12);
+  ctx.fillStyle = "#33ff91";
+  ctx.fillText("X", 32, 12);
+  ctx.fillStyle = "#28d9ff";
+  ctx.fillText("Y", 50, 12);
+  ctx.fillStyle = "#ffb347";
+  ctx.fillText("SPEED", 72, 12);
+  if (motionSamples.length < 2) return;
+  const plotWidth = width - 42;
+  const plotHeight = height - 34;
+  const maxSpeed = Math.max(0.12, ...motionSamples.map((sample) => sample.speed));
+  const drawSeries = (key, color) => {
+    ctx.beginPath();
+    motionSamples.forEach((sample, index) => {
+      const x = 32 + plotWidth * index / (motionSamples.length - 1);
+      const value = key === "speed" ? Math.min(sample.speed / maxSpeed, 1) : sample[key];
+      const y = 17 + plotHeight * value;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+  drawSeries("x", "#33ff91");
+  drawSeries("y", "#28d9ff");
+  drawSeries("speed", "#ffb347");
+}
+
+function isVisiblePerson(pose) {
+  const visibleCore = poseCoreLandmarks.filter((index) => (pose[index]?.visibility ?? 0) >= 0.4).length;
+  const bothShouldersVisible = (pose[11]?.visibility ?? 0) >= 0.45 && (pose[12]?.visibility ?? 0) >= 0.45;
+  const faceVisible = (pose[0]?.visibility ?? 0) >= 0.6
+    && Math.max(pose[2]?.visibility ?? 0, pose[5]?.visibility ?? 0) >= 0.35;
+  const shouldersMidpointY = (pose[11].y + pose[12].y) / 2;
+  const faceAboveShoulders = pose[0].y < shouldersMidpointY;
+  return bothShouldersVisible && faceVisible && faceAboveShoulders && visibleCore >= 4;
+}
+
+function getVisiblePoses(poses) {
+  return poses.filter(isVisiblePerson).sort((a, b) => a[11].x - b[11].x);
+}
+
+function personPoint(pose, index, width, height, mirrored) {
+  const landmark = pose[index];
+  const x = mirrored ? 1 - landmark.x : landmark.x;
+  return [x * width, landmark.y * height];
+}
+
+function drawTrackedPoses(canvas, poses, graphMode = false) {
+  let ctx;
+  let width;
+  let height;
+  if (!graphMode && cameraVideo.videoWidth) {
+    width = cameraVideo.videoWidth;
+    height = cameraVideo.videoHeight;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    ctx = canvas.getContext("2d");
+  } else {
+    const size = sizeCanvas(canvas);
+    if (!size) return;
+    ({ context: ctx, width, height } = size);
+  }
+  ctx.clearRect(0, 0, width, height);
+  if (graphMode) {
+    ctx.fillStyle = "#020405";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "rgba(255,65,76,.13)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= width; x += 25) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+    }
+    for (let y = 0; y <= height; y += 25) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+    }
+    ctx.fillStyle = "#aab8ba";
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillText(poses.length ? "LIVE FULL-BODY POSE" : "WAITING FOR PERSON", 10, 16);
+    ctx.fillStyle = "rgba(255,67,82,.2)";
+    ctx.fillRect(8, 26, width - 16, 1);
+  }
+
+  poses.forEach((pose, poseIndex) => {
+    const visible = (index) => (pose[index]?.visibility ?? 0) >= (graphMode ? 0.28 : 0.35);
+    let minX = 1;
+    let minY = 1;
+    let maxX = 0;
+    let maxY = 0;
+    pose.forEach((landmark) => {
+      if ((landmark.visibility ?? 0) < (graphMode ? 0.28 : 0.35)) return;
+      minX = Math.min(minX, landmark.x);
+      minY = Math.min(minY, landmark.y);
+      maxX = Math.max(maxX, landmark.x);
+      maxY = Math.max(maxY, landmark.y);
+    });
+    const availableWidth = graphMode ? width * 0.88 : width;
+    const availableHeight = graphMode ? (height - 35) * 0.86 : height;
+    const scale = graphMode
+      ? Math.min(availableWidth / Math.max(maxX - minX, 0.16), availableHeight / Math.max(maxY - minY, 0.2))
+      : Math.max(width, height);
+    const originX = graphMode ? (width - (maxX - minX) * scale) / 2 : 0;
+    const originY = graphMode ? 29 + (availableHeight - (maxY - minY) * scale) / 2 : 0;
+    const point = (index) => {
+      const landmark = pose[index];
+      const x = graphMode ? 1 - landmark.x : landmark.x;
+      if (!graphMode) return [x * width, landmark.y * height];
+      return [originX + (x - (1 - maxX)) * scale, originY + (landmark.y - minY) * scale];
+    };
+    if (graphMode && visible(11) && visible(12) && visible(23) && visible(24)) {
+      const [leftShoulderX, leftShoulderY] = point(11);
+      const [rightShoulderX, rightShoulderY] = point(12);
+      const [leftHipX, leftHipY] = point(23);
+      const [rightHipX, rightHipY] = point(24);
+      ctx.beginPath();
+      ctx.moveTo(leftShoulderX, leftShoulderY);
+      ctx.quadraticCurveTo(
+        (leftShoulderX + rightShoulderX) / 2,
+        (leftShoulderY + rightShoulderY) / 2 - width * 0.035,
+        rightShoulderX,
+        rightShoulderY
+      );
+      ctx.quadraticCurveTo(
+        rightShoulderX + width * 0.025,
+        (rightShoulderY + rightHipY) / 2,
+        rightHipX,
+        rightHipY
+      );
+      ctx.quadraticCurveTo(
+        (leftHipX + rightHipX) / 2,
+        (leftHipY + rightHipY) / 2 + width * 0.018,
+        leftHipX,
+        leftHipY
+      );
+      ctx.quadraticCurveTo(
+        leftShoulderX - width * 0.025,
+        (leftShoulderY + leftHipY) / 2,
+        leftShoulderX,
+        leftShoulderY
+      );
+      ctx.closePath();
+      const torsoFill = ctx.createLinearGradient(leftShoulderX, leftShoulderY, rightHipX, rightHipY);
+      torsoFill.addColorStop(0, "rgba(255,70,86,.34)");
+      torsoFill.addColorStop(0.5, "rgba(145,20,35,.19)");
+      torsoFill.addColorStop(1, "rgba(255,70,86,.3)");
+      ctx.fillStyle = torsoFill;
+      ctx.fill();
+    }
+    if (graphMode && visible(11) && visible(12) && visible(0)) {
+      const [leftShoulderX, leftShoulderY] = point(11);
+      const [rightShoulderX, rightShoulderY] = point(12);
+      const [headX, headY] = point(0);
+      const neckX = (leftShoulderX + rightShoulderX) / 2;
+      const neckY = (leftShoulderY + rightShoulderY) / 2;
+      ctx.beginPath();
+      ctx.moveTo(headX, headY + width * 0.035);
+      ctx.lineTo(neckX, neckY);
+      ctx.strokeStyle = "rgba(255,93,108,.46)";
+      ctx.lineWidth = Math.max(5, width * 0.035);
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
+    if (graphMode && visible(0) && visible(7) && visible(8)) {
+      const [headX, headY] = point(0);
+      const [leftEarX, leftEarY] = point(7);
+      const [rightEarX, rightEarY] = point(8);
+      const headWidth = Math.max(10, Math.hypot(rightEarX - leftEarX, rightEarY - leftEarY) * 1.15);
+      ctx.beginPath();
+      ctx.ellipse(headX, headY, headWidth / 2, headWidth * 0.68, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,95,111,.2)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,141,151,.82)";
+      ctx.lineWidth = Math.max(1.5, width * 0.006);
+      ctx.stroke();
+    }
+    const color = graphMode ? "#ff3d52" : "#ff3547";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(255,38,57,.9)";
+    ctx.shadowBlur = graphMode ? 9 : 11;
+    poseConnections.forEach(([from, to]) => {
+      if (!visible(from) || !visible(to)) return;
+      const [x1, y1] = point(from);
+      const [x2, y2] = point(to);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = graphMode ? "rgba(111,9,22,.95)" : "rgba(111,9,22,.75)";
+      ctx.lineWidth = Math.max(graphMode ? 5 : 4, width * (graphMode ? 0.035 : 0.012));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(graphMode ? 2 : 2, width * (graphMode ? 0.012 : 0.004));
+      ctx.stroke();
+    });
+    pose.forEach((landmark, index) => {
+      if (!visible(index)) return;
+      const [x, y] = point(index);
+      ctx.beginPath();
+      const jointRadius = graphMode
+        ? ([11,12,13,14,15,16,23,24,25,26,27,28].includes(index) ? 5 : 3.5)
+        : Math.max(2, width * 0.004);
+      ctx.arc(x, y, jointRadius + (graphMode ? 2 : 0), 0, Math.PI * 2);
+      ctx.fillStyle = graphMode ? "rgba(69,5,15,.95)" : "#690914";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y, jointRadius, 0, Math.PI * 2);
+      ctx.fillStyle = index === 0 ? "#fff0f1" : "#ff6876";
+      ctx.fill();
+      if (graphMode && [11,12,13,14,15,16,23,24,25,26,27,28].includes(index)) {
+        ctx.beginPath();
+        ctx.arc(x, y, jointRadius + 1.2, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,196,201,.75)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    });
+    ctx.shadowBlur = 0;
+    if (graphMode) {
+      const [headX, headY] = point(0);
+      ctx.fillStyle = "#ffd8dc";
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.fillText(`PERSON ${poseIndex + 1}`, headX - 26, Math.max(28, headY - 10));
+    }
+  });
+}
+
+function beepForPerson() {
+  if (!alarmEnabled || !alarmAudioContext || alarmAudioContext.state !== "running") return;
+  const oscillator = alarmAudioContext.createOscillator();
+  const gain = alarmAudioContext.createGain();
+  const now = alarmAudioContext.currentTime;
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.16, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+  oscillator.connect(gain);
+  gain.connect(alarmAudioContext.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.21);
+}
+
+function updatePersonAlert(poses) {
+  const now = Date.now();
+  if (poses.length) {
+    if (poses.length === candidatePoseCount) {
+      candidatePoseFrames += 1;
+    } else {
+      candidatePoseCount = poses.length;
+      candidatePoseFrames = 1;
+    }
+    if (candidatePoseFrames < 3) return;
+    const isNewArrival = lastPersonSeenAt === 0 || now - lastPersonSeenAt > 1100 || poses.length > lastPoseCount;
+    lastPersonSeenAt = now;
+    lastPoseCount = poses.length;
+    personCount = poses.length;
+    cameraPanel.classList.add("person-detected");
+    personAlert.dataset.detected = "true";
+    personAlert.textContent = `⚠ PERSON DETECTED · ${poses.length} TRACKED`;
+    personStatus.textContent = `${poses.length} person${poses.length === 1 ? "" : "s"} · red body landmarks tracking live`;
+    personStageStatus.textContent = `${poses.length} PERSON${poses.length === 1 ? "" : "S"} · TRACKED LIVE`;
+    if (isNewArrival) beepForPerson();
+    return;
+  }
+
+  if (lastPersonSeenAt && now - lastPersonSeenAt <= 900) return;
+  lastPersonSeenAt = 0;
+  lastPoseCount = 0;
+  personCount = 0;
+  candidatePoseCount = 0;
+  candidatePoseFrames = 0;
+  cameraPanel.classList.remove("person-detected");
+  personAlert.dataset.detected = "false";
+  personAlert.textContent = cameraStream ? "PERSON TRACKING · NO PERSON" : "PERSON TRACKING · WAITING FOR CAMERA";
+  personStatus.textContent = cameraStream ? "No person detected · waiting for someone to enter." : "Person detector starts with the camera.";
+  personStageStatus.textContent = "Waiting for a person…";
+}
+
+alarmToggle.addEventListener("click", async () => {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    personStatus.textContent = "This browser does not support the beep alarm.";
+    return;
+  }
+  try {
+    if (!alarmAudioContext || alarmAudioContext.state === "closed") {
+      alarmAudioContext = new AudioContextClass();
+    }
+    await alarmAudioContext.resume();
+    alarmEnabled = !alarmEnabled;
+    alarmToggle.setAttribute("aria-pressed", String(alarmEnabled));
+    alarmToggle.textContent = alarmEnabled ? "Beep alarm enabled" : "Enable beep alarm";
+    personStatus.textContent = alarmEnabled
+      ? "Beep alarm armed · one beep when a new person appears."
+      : "Beep alarm off · visual person tracking remains active.";
+  } catch (error) {
+    personStatus.textContent = `Could not enable beep alarm: ${error.message || error}`;
+  }
+});
+
+function trackVideo(stream) {
+  if (cameraStream !== stream || (!handLandmarker && !poseLandmarker) || handFrameRequest) return;
+  const trackFrame = (timestamp) => {
+    if (cameraStream !== stream || (!handLandmarker && !poseLandmarker)) {
+      handFrameRequest = 0;
+      return;
+    }
+    if (cameraVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && timestamp - lastHandFrameTime >= 40) {
+      lastHandFrameTime = timestamp;
+      const hands = handLandmarker
+        ? handLandmarker.detectForVideo(cameraVideo, timestamp).landmarks || []
+        : [];
+      latestHands = hands;
+      if (handLandmarker) {
+        drawTrackedHands(cameraOverlay, hands);
+        if (!handView.hidden) drawWritingHand(hands);
+      }
+      if (hands.length) {
+        const hand = hands[0];
+        const center = hand[8];
+        const mirroredX = 1 - center.x;
+        targetLookX = Math.max(-1, Math.min(1, (mirroredX - .5) * 2));
+        targetLookY = Math.max(-1, Math.min(1, (center.y - .45) * 1.8));
+        handLastSeenAt = Date.now();
+        if (!lookFrame) lookFrame = requestAnimationFrame(animateLook);
+        handStatus.textContent = "Hand landmarks are being processed locally in your browser.";
+        handStatus.dataset.error = "false";
+        if (timestamp - lastGraphSample >= 40) {
+          const previous = motionSamples[motionSamples.length - 1];
+          const elapsedSeconds = previous ? (timestamp - previous.time) / 1000 : 0;
+          const speed = previous && elapsedSeconds > 0
+            ? Math.hypot(mirroredX - previous.x, center.y - previous.y) / elapsedSeconds
+            : 0;
+          motionSamples.push({ x: mirroredX, y: center.y, speed, time: timestamp });
+          if (motionSamples.length > 150) motionSamples.shift();
+          lastGraphSample = timestamp;
+          drawMotionGraph();
+        }
+      }
+      if (poseLandmarker && timestamp - lastPoseFrameTime >= 100) {
+        lastPoseFrameTime = timestamp;
+        const poseResult = poseLandmarker.detectForVideo(cameraVideo, timestamp);
+        currentPoses = getVisiblePoses(poseResult.landmarks || []);
+        updatePersonAlert(currentPoses);
+        drawTrackedPoses(personPreview, currentPoses, true);
+      }
+      drawTrackedPoses(cameraPersonOverlay, currentPoses);
+    }
+    handFrameRequest = requestAnimationFrame(trackFrame);
+  };
+  handFrameRequest = requestAnimationFrame(trackFrame);
+}
+
+async function startPoseTracking(stream) {
+  personStatus.textContent = "Loading local human body tracker…";
+  personAlert.textContent = "PERSON TRACKING · LOADING";
+  personAlert.dataset.detected = "false";
+  try {
+    const detector = await loadPoseLandmarker();
+    if (cameraStream !== stream) {
+      detector.close();
+      return;
+    }
+    poseLandmarker = detector;
+    personStatus.textContent = "Human body tracker ready · processing locally.";
+    lastPoseFrameTime = 0;
+    if (!handFrameRequest) trackVideo(stream);
+  } catch (error) {
+    if (cameraStream !== stream) return;
+    personStatus.textContent = `Could not load human body tracker: ${error.message || error}`;
+    personStatus.dataset.error = "true";
+    personAlert.textContent = "PERSON TRACKING · MODEL ERROR";
+    personAlert.dataset.detected = "false";
+  }
+}
+
+function stopPoseTracking() {
+  poseLandmarker?.close();
+  poseLandmarker = null;
+  poseLandmarkerPromise = null;
+  currentPoses = [];
+  lastPoseFrameTime = 0;
+  lastPoseCount = 0;
+  lastPersonSeenAt = 0;
+  personCount = 0;
+  candidatePoseCount = 0;
+  candidatePoseFrames = 0;
+  cameraPanel.classList.remove("person-detected");
+  personAlert.dataset.detected = "false";
+  personAlert.textContent = "PERSON TRACKING · WAITING FOR CAMERA";
+  personStatus.textContent = "Person detector starts with the camera.";
+  personStatus.dataset.error = "false";
+  personStageStatus.textContent = "Waiting for a person…";
+  const size = sizeCanvas(personPreview);
+  if (size) {
+    size.context.fillStyle = "#020405";
+    size.context.fillRect(0, 0, size.width, size.height);
+  }
+}
+
+async function startHandTracking(stream) {
+  handStatus.textContent = "Loading local hand tracking model…";
+  handStatus.dataset.error = "false";
+  try {
+    const detector = await loadHandLandmarker();
+    if (cameraStream !== stream) {
+      detector.close();
+      return;
+    }
+    handLandmarker = detector;
+    handStatus.textContent = "Hand tracking ready · camera stays on this device.";
+    trackVideo(stream);
+  } catch (error) {
+    if (cameraStream !== stream) return;
+    handStatus.textContent = `Could not load hand tracking: ${error.message || error}`;
+    handStatus.dataset.error = "true";
+  }
+}
+
+function stopHandTracking() {
+  if (handFrameRequest) cancelAnimationFrame(handFrameRequest);
+  handFrameRequest = 0;
+  handLandmarker?.close();
+  handLandmarker = null;
+  handLandmarkerPromise = null;
+  currentPoses = [];
+  handLastSeenAt = 0;
+  const overlayContext = cameraOverlay.getContext("2d");
+  overlayContext.clearRect(0, 0, cameraOverlay.width, cameraOverlay.height);
+  const personOverlayContext = cameraPersonOverlay.getContext("2d");
+  personOverlayContext.clearRect(0, 0, cameraPersonOverlay.width, cameraPersonOverlay.height);
+  const cursorContext = handCursor.getContext("2d");
+  cursorContext.clearRect(0, 0, handCursor.width, handCursor.height);
+  previousPenPoint = null;
+  handState.textContent = "Waiting for camera and hand…";
+  handStatus.textContent = "Start the camera to load local hand tracking.";
+  handStatus.dataset.error = "false";
+}
+
+document.addEventListener("pointermove", (event) => {
+  document.body.style.setProperty("--pointer-x", `${event.clientX}px`);
+  document.body.style.setProperty("--pointer-y", `${event.clientY}px`);
+
+  targetLookX = Math.max(-1, Math.min(1, (event.clientX / window.innerWidth - .5) * 2));
+  targetLookY = Math.max(-1, Math.min(1, (event.clientY / window.innerHeight - .45) * 1.8));
+
+  if (!lookFrame) lookFrame = requestAnimationFrame(animateLook);
+});
+
+function animateLook() {
+  lookX += (targetLookX - lookX) * .32;
+  lookY += (targetLookY - lookY) * .32;
+  document.body.style.setProperty("--look-x", lookX.toFixed(3));
+  document.body.style.setProperty("--look-y", lookY.toFixed(3));
+  document.body.style.setProperty("--gaze-x", `${(lookX * 20).toFixed(2)}%`);
+  document.body.style.setProperty("--gaze-y", `${(lookY * 14).toFixed(2)}%`);
+
+  if (Math.abs(targetLookX - lookX) > .002 || Math.abs(targetLookY - lookY) > .002) {
+    lookFrame = requestAnimationFrame(animateLook);
+  } else {
+    lookFrame = 0;
+  }
+}
+
+document.addEventListener("pointerleave", () => {
+  targetLookX = 0;
+  targetLookY = 0;
+  if (!lookFrame) lookFrame = requestAnimationFrame(animateLook);
+});
+
+function scheduleBlink() {
+  blinkTimer = window.setTimeout(() => {
+    headTurn.classList.add("is-blinking");
+    window.setTimeout(() => headTurn.classList.remove("is-blinking"), 180);
+    scheduleBlink();
+  }, 2200 + Math.random() * 3200);
+}
+
+scheduleBlink();
+
+function selectedSpeechLanguage() {
+  return voiceLanguage.value === "ur" ? "ur-PK" : "en-US";
+}
+
+function lookTowardCamera() {
+  const cameraBounds = cameraVideo.getBoundingClientRect();
+  targetLookX = Math.max(-1, Math.min(1, ((cameraBounds.left + cameraBounds.width / 2) / window.innerWidth - .5) * 2));
+  targetLookY = Math.max(-1, Math.min(1, ((cameraBounds.top + cameraBounds.height / 2) / window.innerHeight - .45) * 1.8));
+  if (!lookFrame) lookFrame = requestAnimationFrame(animateLook);
+}
+
+function speakResponse(text, status, language = "en-US") {
+  lookTowardCamera();
+  voiceStatus.textContent = status;
+  voiceStatus.dataset.error = "false";
+  if (!window.speechSynthesis) {
+    voiceStatus.textContent = `${status} Speech output is unavailable in this browser.`;
+    return;
+  }
+
+  isSpeaking = true;
+  headTurn.classList.add("is-speaking");
+  window.speechSynthesis.cancel();
+  const reply = new SpeechSynthesisUtterance(text);
+  reply.lang = language;
+  reply.onend = finishSpeaking;
+  reply.onerror = () => {
+    finishSpeaking();
+    voiceStatus.textContent = `${status} Speech output could not start.`;
+    voiceStatus.dataset.error = "true";
+  };
+  window.speechSynthesis.speak(reply);
+}
+
+function finishSpeaking() {
+  isSpeaking = false;
+  headTurn.classList.remove("is-speaking");
+}
+
+function handleFacePresence(message) {
+  if (!cameraStream) return;
+  if (message.detected) {
+    noFaceSince = 0;
+    absenceReminderShown = false;
+    const mirroredX = 1 - message.x;
+    if (Date.now() - handLastSeenAt > 1200) {
+      targetLookX = Math.max(-1, Math.min(1, (mirroredX - .5) * 2));
+      targetLookY = Math.max(-1, Math.min(1, (message.y - .5) * 2));
+      if (!lookFrame) lookFrame = requestAnimationFrame(animateLook);
+    }
+    cameraStatus.textContent = "Camera live · face tracking on";
+    cameraStatus.dataset.error = "false";
+    return;
+  }
+
+  if (!noFaceSince) noFaceSince = Date.now();
+  cameraStatus.textContent = "Camera live · face not detected";
+  cameraStatus.dataset.error = "false";
+  const faceMissingLongEnough = Date.now() - Math.max(cameraStartedAt, noFaceSince) >= 5000;
+  if (faceMissingLongEnough && !absenceReminderShown) {
+    absenceReminderShown = true;
+    targetLookX = 0;
+    targetLookY = 0;
+    if (!lookFrame) lookFrame = requestAnimationFrame(animateLook);
+    speakResponse("Javeed, camera ke samne aa jaiye.", "Javeed, camera ke samne aa jaiye.", "ur-PK");
+  }
+}
+
+function stopFaceMonitoring() {
+  window.clearInterval(faceFrameTimer);
+  faceFrameTimer = 0;
+  faceSocket?.close();
+  faceSocket = null;
+  faceCanvas = null;
+  cameraStartedAt = 0;
+  noFaceSince = 0;
+  absenceReminderShown = false;
+}
+
+function startFaceFrameCapture(socket, stream) {
+  const captureFaceFrame = () => {
+    if (cameraStream !== stream || socket.readyState !== WebSocket.OPEN || !cameraVideo.videoWidth) return;
+    const canvas = faceCanvas;
+    canvas.width = 320;
+    canvas.height = 240;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+    const image = canvas.toDataURL("image/jpeg", .5).split(",", 2)[1];
+    socket.send(JSON.stringify({ type: "face_frame", image }));
+  };
+
+  captureFaceFrame();
+  faceFrameTimer = window.setInterval(captureFaceFrame, 700);
+}
+
+function startFaceMonitoring(stream) {
+  const socket = new WebSocket("ws://127.0.0.1:8765");
+  faceSocket = socket;
+  faceCanvas = document.createElement("canvas");
+  cameraStartedAt = Date.now();
+  noFaceSince = cameraStartedAt;
+
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === "ready") {
+      if (cameraStream !== stream || faceSocket !== socket) return;
+      cameraStatus.textContent = "Camera live · looking for you";
+      startFaceFrameCapture(socket, stream);
+    } else if (message.type === "face_presence") {
+      handleFacePresence(message);
+    } else if (message.type === "error") {
+      cameraStatus.textContent = message.message;
+      cameraStatus.dataset.error = "true";
+    }
+  };
+  socket.onerror = () => {
+    if (faceSocket !== socket) return;
+    stopFaceMonitoring();
+    if (cameraStream === stream) {
+      cameraStatus.textContent = "Camera live · hand tracking active; face service offline.";
+      cameraStatus.dataset.error = "false";
+    }
+  };
+  socket.onclose = () => {
+    if (faceSocket !== socket) return;
+    stopFaceMonitoring();
+    if (cameraStream === stream) {
+      cameraStatus.textContent = "Camera live · hand tracking active; face service offline.";
+      cameraStatus.dataset.error = "false";
+    }
+  };
+}
+
+function keepAwakeForCommand() {
+  isAwake = true;
+  window.clearTimeout(awakeTimer);
+  awakeTimer = window.setTimeout(() => {
+    isAwake = false;
+    voiceStatus.textContent = "Say “Jarvis” when you want to ask something.";
+  }, 15000);
+}
+
+function renderVoiceCommands(commands) {
+  const list = document.querySelector("#command-list");
+  list.replaceChildren();
+  commands.forEach(({ question }) => {
+    const item = document.createElement("li");
+    item.textContent = question;
+    list.append(item);
+  });
+  document.querySelector(".command-guide summary").textContent = `Show ${commands.length} things to ask Jarvis`;
+}
+
+function handleVoiceMessage(message) {
+  if (message.type === "ready") {
+    renderVoiceCommands(message.commands);
+    return;
+  }
+  if (message.type === "model_loading") {
+    voiceStatus.textContent = `Loading the offline ${message.language === "ur" ? "Urdu" : "English"} speech model. First setup can take a few minutes.`;
+    return;
+  }
+  if (message.type === "language_ready") {
+    voiceStatus.textContent = `Offline ${message.language === "ur" ? "Urdu" : "English"} listening is ready. Say “Jarvis” to begin.`;
+    return;
+  }
+  if (message.type === "wake") {
+    keepAwakeForCommand();
+    voiceStatus.dataset.error = "false";
+    const greeting = voiceLanguage.value === "ur" ? "جی جاوید، بتائیے میں کیا کر سکتا ہوں؟" : "Yes, Javeed? What can I do for you?";
+    speakResponse(greeting, "I heard you, Javeed.", selectedSpeechLanguage());
+    return;
+  }
+  if (message.type === "command") {
+    if (!isAwake && !message.wake) return;
+    if (message.id === "sleep") {
+      isAwake = false;
+      window.clearTimeout(awakeTimer);
+    } else {
+      keepAwakeForCommand();
+    }
+    speakResponse(message.answer, `Jarvis: ${message.answer}`, message.replyLanguage || selectedSpeechLanguage());
+    return;
+  }
+  if (message.type === "whatsapp_opening") {
+    whatsappStatus.textContent = "Opening WhatsApp Web...";
+    speakResponse(
+      voiceLanguage.value === "ur" ? "واٹس ایپ ویب کھول رہا ہوں۔" : "Opening WhatsApp Web.",
+      "Opening WhatsApp Web.",
+      selectedSpeechLanguage()
+    );
+    return;
+  }
+  if (message.type === "whatsapp_preparing") {
+    whatsappStatus.dataset.error = "false";
+    whatsappStatus.textContent = `Finding the exact chat for ${message.contact} and preparing a draft...`;
+    return;
+  }
+  if (message.type === "whatsapp_confirmation") {
+    whatsappStatus.dataset.error = "false";
+    whatsappStatus.textContent = `Review the draft for ${message.contact}; say “yes, send it” or “no, cancel”.`;
+    keepAwakeForCommand();
+    const confirmation = voiceLanguage.value === "ur"
+      ? `${message.contact} کے لیے یہ پیغام تیار ہے: ${message.text}۔ بھیجنے کے لیے ہاں کہیں، یا منسوخ کرنے کے لیے نہیں کہیں۔`
+      : `I found ${message.contact}. The message is: ${message.text}. Say “yes, send it” to send, or “no, cancel” to cancel.`;
+    speakResponse(confirmation, `Waiting for your confirmation to message ${message.contact}.`, selectedSpeechLanguage());
+    return;
+  }
+  if (message.type === "whatsapp_sending") {
+    whatsappStatus.textContent = "Sending the message you confirmed...";
+    return;
+  }
+  if (message.type === "whatsapp_sent") {
+    whatsappStatus.dataset.error = "false";
+    whatsappStatus.textContent = `Message sent to ${message.contact}.`;
+    speakResponse(
+      voiceLanguage.value === "ur" ? `${message.contact} کو پیغام بھیج دیا ہے۔` : `The message was sent to ${message.contact}.`,
+      `Message sent to ${message.contact}.`,
+      selectedSpeechLanguage()
+    );
+    return;
+  }
+  if (message.type === "whatsapp_cancelled") {
+    whatsappStatus.dataset.error = "false";
+    whatsappStatus.textContent = "The message was cancelled; nothing was sent.";
+    speakResponse(
+      voiceLanguage.value === "ur" ? "پیغام منسوخ کر دیا ہے، کچھ نہیں بھیجا گیا۔" : "Cancelled. Nothing was sent.",
+      "Cancelled. Nothing was sent.",
+      selectedSpeechLanguage()
+    );
+    return;
+  }
+  if (message.type === "whatsapp_repeat_confirmation") {
+    speakResponse(
+      voiceLanguage.value === "ur" ? "بھیجنے کے لیے ہاں کہیں، یا منسوخ کرنے کے لیے نہیں کہیں۔" : "Please say “yes, send it” or “no, cancel”.",
+      "Please say yes to send or no to cancel.",
+      selectedSpeechLanguage()
+    );
+    return;
+  }
+  if (message.type === "whatsapp_error") {
+    whatsappStatus.dataset.error = "true";
+    whatsappStatus.textContent = message.message;
+    speakResponse(message.message, message.message, selectedSpeechLanguage());
+    return;
+  }
+  if (message.type === "unrecognized" && isAwake) {
+    keepAwakeForCommand();
+    const response = voiceLanguage.value === "ur"
+      ? "معاف کیجیے جاوید، میں سمجھ نہیں سکا۔ دوبارہ کہیں۔"
+      : "Sorry, Javeed. I did not understand that. Open the command list and try one of the one hundred questions.";
+    speakResponse(response, "I did not catch that. Please try again.", selectedSpeechLanguage());
+  }
+}
+
+function stopLocalListening(status = "Listening is off", isError = false) {
+  listeningForJarvis = false;
+  isAwake = false;
+  window.clearTimeout(awakeTimer);
+  voiceSocket?.close();
+  voiceSocket = null;
+  audioProcessor?.disconnect();
+  audioSource?.disconnect();
+  audioProcessor = null;
+  audioSource = null;
+  microphoneStream?.getTracks().forEach((track) => track.stop());
+  microphoneStream = null;
+  if (audioContext && audioContext.state !== "closed") {
+    audioContext.close().catch((error) => {
+      console.error("Could not close the microphone audio context:", error);
+    });
+  }
+  audioContext = null;
+  voiceToggle.textContent = "Start listening";
+  voiceLanguage.disabled = false;
+  voiceStatus.textContent = status;
+  voiceStatus.dataset.error = String(isError);
+}
+
+function handleLocalMessage(message) {
+  if (!listeningForJarvis || isSpeaking) return;
+  if (message.type === "error") {
+    voiceStatus.textContent = message.message;
+    voiceStatus.dataset.error = "true";
+    return;
+  }
+  handleVoiceMessage(message);
+}
+
+async function startLocalListening() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Microphone access is unavailable. Open this page in a modern browser.");
+  }
+  if (!window.AudioContext || !window.AudioWorkletNode) {
+    throw new Error("Offline microphone capture is not supported in this browser.");
+  }
+
+  microphoneStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+    video: false
+  });
+  voiceStatus.textContent = "Connecting to the local offline recognizer...";
+
+  const socket = new WebSocket("ws://127.0.0.1:8765");
+  voiceSocket = socket;
+  await new Promise((resolve, reject) => {
+    let opened = false;
+    let ready = false;
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      callback(value);
+    };
+    const timeout = window.setTimeout(() => finish(reject, new Error("The offline model did not become ready. Check the local server window and try again.")), 300000);
+    const finishIfReady = () => {
+      if (opened && ready) {
+        finish(resolve);
+      }
+    };
+    socket.onopen = () => {
+      opened = true;
+      finishIfReady();
+    };
+    socket.onmessage = (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        finish(reject, new Error("The local recognizer sent an invalid response."));
+        return;
+      }
+      if (message.type === "ready") {
+        handleVoiceMessage(message);
+        socket.send(JSON.stringify({ type: "configure", language: voiceLanguage.value }));
+      } else if (message.type === "language_ready") {
+        ready = true;
+        handleVoiceMessage(message);
+        finishIfReady();
+      } else if (message.type === "model_loading") {
+        handleVoiceMessage(message);
+      } else if (message.type === "whatsapp_opening" || message.type.startsWith("whatsapp_")) {
+        handleLocalMessage(message);
+      } else if (message.type === "wake" || message.type === "command" || message.type === "unrecognized") {
+        handleLocalMessage(message);
+      } else if (message.type === "error") {
+        if (!ready) finish(reject, new Error(message.message));
+        else handleLocalMessage(message);
+      }
+    };
+    socket.onerror = () => finish(reject, new Error(
+      location.protocol === "file:"
+        ? "This HTML file is open directly. Use Jarvis at http://127.0.0.1:8000/ so the local recognizer can connect."
+        : "The local recognizer is not running. Double-click start-local-voice.bat and keep its window open."
+    ));
+    socket.onclose = () => {
+      if (!ready) finish(reject, new Error("The local recognizer disconnected before it was ready."));
+      else if (listeningForJarvis && voiceSocket === socket) {
+        stopLocalListening("Local recognizer disconnected. Restart start-local-voice.bat.", true);
+      }
+    };
+  });
+
+  audioContext = new AudioContext();
+  const workletUrl = URL.createObjectURL(new Blob([`
+    class LocalPcmCapture extends AudioWorkletProcessor {
+      process(inputs) {
+        const channels = inputs[0];
+        if (!channels || !channels.length) return true;
+        const mono = new Float32Array(channels[0].length);
+        for (const channel of channels) {
+          for (let index = 0; index < mono.length; index += 1) mono[index] += channel[index] / channels.length;
+        }
+        this.port.postMessage(mono, [mono.buffer]);
+        return true;
+      }
+    }
+    registerProcessor("local-pcm-capture", LocalPcmCapture);
+  `], { type: "text/javascript" }));
+  try {
+    await audioContext.audioWorklet.addModule(workletUrl);
+  } finally {
+    URL.revokeObjectURL(workletUrl);
+  }
+  audioSource = audioContext.createMediaStreamSource(microphoneStream);
+  audioProcessor = new AudioWorkletNode(audioContext, "local-pcm-capture", {
+    numberOfInputs: 1,
+    numberOfOutputs: 1,
+    outputChannelCount: [1]
+  });
+  const silentOutput = audioContext.createGain();
+  silentOutput.gain.value = 0;
+  const pendingPcmChunks = [];
+  let pendingPcmSamples = 0;
+  audioProcessor.port.onmessage = (event) => {
+    if (!listeningForJarvis || socket.readyState !== WebSocket.OPEN) return;
+    const samples = event.data;
+    const ratio = audioContext.sampleRate / 16000;
+    const outputLength = Math.floor(samples.length / ratio);
+    const pcm = new Int16Array(outputLength);
+    for (let index = 0; index < outputLength; index += 1) {
+      const start = index * ratio;
+      const end = Math.min((index + 1) * ratio, samples.length);
+      let weightedSample = 0;
+      for (let sourceIndex = Math.floor(start); sourceIndex < Math.ceil(end); sourceIndex += 1) {
+        const overlap = Math.min(end, sourceIndex + 1) - Math.max(start, sourceIndex);
+        weightedSample += samples[sourceIndex] * overlap;
+      }
+      const sample = weightedSample / (end - start);
+      pcm[index] = Math.max(-1, Math.min(1, sample)) * (sample < 0 ? 32768 : 32767);
+    }
+    pendingPcmChunks.push(pcm);
+    pendingPcmSamples += pcm.length;
+    if (pendingPcmSamples >= 2048) {
+      const packet = new Int16Array(pendingPcmSamples);
+      let offset = 0;
+      pendingPcmChunks.forEach((chunk) => {
+        packet.set(chunk, offset);
+        offset += chunk.length;
+      });
+      pendingPcmChunks.length = 0;
+      pendingPcmSamples = 0;
+      socket.send(packet.buffer);
+    }
+  };
+  audioSource.connect(audioProcessor);
+  audioProcessor.connect(silentOutput);
+  silentOutput.connect(audioContext.destination);
+  await audioContext.resume();
+
+  listeningForJarvis = true;
+  voiceLanguage.disabled = true;
+  voiceToggle.textContent = "Stop listening";
+  voiceStatus.textContent = "Listening offline for “Jarvis”";
+  voiceStatus.dataset.error = "false";
+}
+
+voiceLanguage.addEventListener("change", () => {
+  voiceStatus.textContent = `Selected ${voiceLanguage.value === "ur" ? "Urdu" : "English"}. Start listening to apply.`;
+});
+
+whatsappOpen.addEventListener("click", () => {
+  if (!voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) {
+    window.open("https://web.whatsapp.com/", "_blank", "noopener");
+    whatsappStatus.dataset.error = "false";
+    whatsappStatus.textContent = "Opening WhatsApp Web. Install the Jarvis extension to enable voice messaging.";
+    return;
+  }
+  voiceSocket.send(JSON.stringify({ type: "open_whatsapp" }));
+});
+
+function sendPhoneSignal(type, data) {
+  if (!phoneSignalSocket || phoneSignalSocket.readyState !== WebSocket.OPEN || !phoneSessionToken) return;
+  phoneSignalSocket.send(JSON.stringify({ type, token: phoneSessionToken, ...(data === undefined ? {} : { data }) }));
+}
+
+function stopRemoteCamera() {
+  if (!cameraStreamIsRemote) return;
+  stopFaceMonitoring();
+  stopHandTracking();
+  stopPoseTracking();
+  cameraStream?.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+  cameraStreamIsRemote = false;
+  cameraVideo.srcObject = null;
+  cameraToggle.textContent = "Start camera";
+  cameraStatus.textContent = "Phone camera disconnected";
+  cameraStatus.dataset.error = "false";
+}
+
+function disconnectPhoneCompanion(sendDisconnect = true) {
+  if (phoneDisconnecting) return;
+  phoneDisconnecting = true;
+  if (sendDisconnect) sendPhoneSignal("disconnect");
+  if (phonePeerConnection) {
+    phonePeerConnection.ontrack = null;
+    phonePeerConnection.onicecandidate = null;
+    phonePeerConnection.close();
+    phonePeerConnection = null;
+  }
+  const socket = phoneSignalSocket;
+  phoneSignalSocket = null;
+  phoneSessionToken = null;
+  pendingPhoneIceCandidates.length = 0;
+  stopRemoteCamera();
+  if (socket && socket.readyState < WebSocket.CLOSING) {
+    socket.close();
+  }
+  phonePairButton.disabled = false;
+  phonePairButton.textContent = "Pair phone camera";
+  phonePairDetails.hidden = true;
+  phonePairCode.textContent = "";
+  phoneDisconnecting = false;
+}
+
+async function startPhoneOffer() {
+  if (!phoneSessionToken || phonePeerConnection) return;
+  pendingPhoneIceCandidates.length = 0;
+  const peer = new RTCPeerConnection({ iceServers: [] });
+  phonePeerConnection = peer;
+  peer.addTransceiver("video", { direction: "recvonly" });
+  peer.onicecandidate = ({ candidate }) => {
+    if (candidate && phonePeerConnection === peer) sendPhoneSignal("ice", candidate);
+  };
+  peer.ontrack = async (event) => {
+    if (phonePeerConnection !== peer) return;
+    const remoteStream = event.streams[0] || new MediaStream([event.track]);
+    cameraStream = remoteStream;
+    cameraStreamIsRemote = true;
+    cameraVideo.srcObject = remoteStream;
+    try {
+      await cameraVideo.play();
+    } catch (_) {
+      // The stream remains available; the user can start playback with the camera control.
+    }
+    cameraToggle.textContent = "Stop camera";
+    cameraStatus.textContent = "Phone camera live · tracking runs on this desktop";
+    cameraStatus.dataset.error = "false";
+    startFaceMonitoring(remoteStream);
+    void startHandTracking(remoteStream);
+    void startPoseTracking(remoteStream);
+    event.track.addEventListener("ended", () => {
+      if (phonePeerConnection === peer) disconnectPhoneCompanion(false);
+    }, { once: true });
+  };
+  peer.onconnectionstatechange = () => {
+    if (phonePeerConnection !== peer) return;
+    if (peer.connectionState === "connected") {
+      phonePairStatus.textContent = "Phone connected · video is local to this Wi-Fi.";
+    } else if (peer.connectionState === "failed" || peer.connectionState === "disconnected") {
+      phonePairStatus.textContent = "Phone video connection ended.";
+      disconnectPhoneCompanion(true);
+    }
+  };
+  const offer = await peer.createOffer();
+  await peer.setLocalDescription(offer);
+  sendPhoneSignal("offer", peer.localDescription);
+  phonePairStatus.textContent = "Phone paired · establishing direct video…";
+}
+
+async function handlePhoneSignal(message) {
+  if (message.type === "paired" && message.role === "desktop") {
+    phoneSessionToken = message.token;
+    phonePairCode.textContent = message.code;
+    phonePairDetails.hidden = false;
+    phonePairStatus.textContent = "Waiting for the phone to enter this code…";
+  } else if (message.type === "peer_joined") {
+    phonePairStatus.textContent = "Phone paired · negotiating direct video…";
+    await startPhoneOffer();
+  } else if (message.type === "answer" && phonePeerConnection) {
+    await phonePeerConnection.setRemoteDescription(message.data);
+    while (pendingPhoneIceCandidates.length) {
+      await phonePeerConnection.addIceCandidate(pendingPhoneIceCandidates.shift());
+    }
+  } else if (message.type === "ice" && phonePeerConnection && message.data) {
+    if (phonePeerConnection.remoteDescription) {
+      await phonePeerConnection.addIceCandidate(message.data);
+    } else {
+      pendingPhoneIceCandidates.push(message.data);
+    }
+  } else if (message.type === "peer_left") {
+    disconnectPhoneCompanion(false);
+    cameraStatus.textContent = "Phone disconnected · camera stopped.";
+    phonePairStatus.textContent = "Phone disconnected.";
+  }
+}
+
+if (phoneOrigin.startsWith("https://")) {
+  phonePairUrl.href = phoneOrigin + "/phone";
+  phonePairUrl.textContent = phoneOrigin + "/phone";
+} else {
+  phonePairButton.disabled = true;
+  phonePairButton.title = "Start the local server to enable phone pairing.";
+}
+
+phonePairButton.addEventListener("click", () => {
+  if (!phoneOrigin.startsWith("https://")) return;
+  if (cameraStream && !cameraStreamIsRemote) {
+    phonePairStatus.textContent = "Stop the desktop webcam before pairing the phone.";
+    phonePairDetails.hidden = false;
+    return;
+  }
+  if (phoneSignalSocket) disconnectPhoneCompanion(true);
+  const phoneHost = new URL(phoneOrigin).hostname;
+  const socket = new WebSocket(`wss://${phoneHost}:8444`);
+  phoneSignalSocket = socket;
+  phonePairButton.disabled = true;
+  phonePairDetails.hidden = false;
+  phonePairStatus.textContent = "Opening secure local signaling…";
+  socket.onopen = () => socket.send(JSON.stringify({ type: "create" }));
+  socket.onmessage = async (event) => {
+    try {
+      await handlePhoneSignal(JSON.parse(event.data));
+    } catch (error) {
+      phonePairStatus.textContent = `Phone connection error: ${error.message || error}`;
+      disconnectPhoneCompanion(true);
+    }
+  };
+  socket.onerror = () => {
+    phonePairStatus.textContent = "Cannot reach the local phone service. Check the private-network firewall.";
+  };
+  socket.onclose = () => {
+    if (phoneSignalSocket !== socket || phoneDisconnecting) return;
+    disconnectPhoneCompanion(false);
+    phonePairStatus.textContent = "Pairing connection closed.";
+  };
+});
+
+phoneDisconnectButton.addEventListener("click", () => {
+  disconnectPhoneCompanion(true);
+  phonePairStatus.textContent = "Phone disconnected. Its camera has stopped.";
+});
+
+voiceToggle.addEventListener("click", async () => {
+  if (listeningForJarvis) {
+    stopLocalListening();
+    return;
+  }
+
+  voiceToggle.disabled = true;
+  voiceStatus.textContent = "Requesting microphone access...";
+  voiceStatus.dataset.error = "false";
+  try {
+    await startLocalListening();
+  } catch (error) {
+    stopLocalListening(`Could not start offline listening: ${error.message || error.name}`, true);
+  } finally {
+    voiceToggle.disabled = false;
+  }
+});
+
+cameraToggle.addEventListener("click", async () => {
+  if (!cameraStream && phoneSignalSocket) {
+    cameraStatus.textContent = "Phone pairing is in progress. Disconnect it before starting the desktop webcam.";
+    cameraStatus.dataset.error = "false";
+    return;
+  }
+  if (cameraStream) {
+    if (cameraStreamIsRemote) {
+      disconnectPhoneCompanion(true);
+      return;
+    }
+    stopFaceMonitoring();
+    stopHandTracking();
+    stopPoseTracking();
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+    cameraVideo.srcObject = null;
+    cameraToggle.textContent = "Start camera";
+    cameraStatus.textContent = "Camera is off";
+    cameraStatus.dataset.error = "false";
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraStatus.textContent = "Camera unavailable. Open this page on localhost or HTTPS.";
+    cameraStatus.dataset.error = "true";
+    return;
+  }
+
+  cameraToggle.disabled = true;
+  cameraStatus.textContent = "Waiting for camera permission...";
+  cameraStatus.dataset.error = "false";
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    cameraStream = stream;
+    cameraVideo.srcObject = stream;
+    await cameraVideo.play();
+    const [videoTrack] = stream.getVideoTracks();
+    videoTrack.addEventListener("ended", () => {
+      if (cameraStream !== stream) return;
+      stopFaceMonitoring();
+      stopHandTracking();
+      stopPoseTracking();
+      cameraStream = null;
+      cameraVideo.srcObject = null;
+      cameraToggle.textContent = "Start camera";
+      cameraStatus.textContent = "Camera stopped. Click Start camera to try again.";
+      cameraStatus.dataset.error = "true";
+    }, { once: true });
+    cameraToggle.textContent = "Stop camera";
+    cameraStatus.textContent = "Camera is live on this device only";
+    startFaceMonitoring(stream);
+    void startHandTracking(stream);
+    void startPoseTracking(stream);
+  } catch (error) {
+    const messages = {
+      NotAllowedError: "Camera permission denied. Allow camera access in your browser settings.",
+      NotFoundError: "No camera was found on this device.",
+      NotReadableError: "Camera is busy or unavailable. Close other apps using it and try again.",
+      SecurityError: "Camera access is blocked on this page. Run start-local-voice.bat and use its localhost page."
+    };
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    stopFaceMonitoring();
+    stopHandTracking();
+    stopPoseTracking();
+    cameraStream = null;
+    cameraVideo.srcObject = null;
+    cameraStatus.textContent = messages[error.name] || `Could not start camera: ${error.message || error.name}`;
+    cameraStatus.dataset.error = "true";
+  } finally {
+    cameraToggle.disabled = false;
+  }
+});
+
+window.addEventListener("pagehide", () => {
+  stopFaceMonitoring();
+  stopHandTracking();
+  stopPoseTracking();
+  cameraStream?.getTracks().forEach((track) => track.stop());
+  window.clearTimeout(blinkTimer);
+  stopLocalListening("Listening is off");
+  window.speechSynthesis?.cancel();
+  alarmAudioContext?.close();
+  alarmAudioContext = null;
+});
+
+window.setTimeout(() => {
+  if (!cameraStream && !cameraToggle.disabled) cameraToggle.click();
+}, 350);
+</script>
+</body>
+</html>
